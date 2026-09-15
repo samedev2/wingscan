@@ -58,7 +58,7 @@ html, body {
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: 1fr 380px;
   gap: 16px;
   padding: 16px;
   height: calc(100% - 49px);
@@ -89,12 +89,16 @@ html, body {
   object-fit: contain;
 }
 
-.video-wrap canvas {
+.video-wrap .overlay-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.video-wrap #overlay {
+  pointer-events: auto;
 }
 
 .hud {
@@ -152,13 +156,110 @@ code {
   font-size: 11px;
 }
 
+/* ----- System Panel v3 ----- */
+
+.system-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.panel-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.panel-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  justify-content: space-between;
+}
+
+.panel-row label > input[type="checkbox"] {
+  margin-right: 4px;
+}
+
+.panel-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.panel-row select {
+  background: #21262d;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.panel-value {
+  font-family: ui-monospace, monospace;
+  color: var(--fg);
+  font-size: 11px;
+}
+
+.btn-mini {
+  background: #21262d;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.btn-mini:hover { background: #30363d; }
+
+.btn-mini.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0e1117;
+  font-weight: 600;
+}
+
+/* ----- Heatmap tabs ----- */
+
+.heatmap-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.heatmap-tabs button.tab {
+  background: #21262d;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.heatmap-tabs button.tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0e1117;
+  font-weight: 600;
+}
+
 /* ----- Labels / Naming panel ----- */
 
 .labels-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 280px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
@@ -251,6 +352,7 @@ code {
   pointer-events: none;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
   max-width: 360px;
+  z-index: 100;
 }
 
 .new-item-banner.show { display: flex; }
@@ -269,6 +371,37 @@ code {
   font-size: 14px;
   font-weight: 600;
   color: var(--accent);
+}
+
+/* ----- Inline namer popover ----- */
+
+.inline-namer {
+  position: fixed;
+  z-index: 200;
+  background: #161b22;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 240px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inline-namer input {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.inline-namer-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
 /* ----- Counter ----- */
@@ -301,7 +434,7 @@ code {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 200px;
+  max-height: 160px;
   overflow-y: auto;
   font-family: ui-monospace, monospace;
   font-size: 12px;

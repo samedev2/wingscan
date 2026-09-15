@@ -19,6 +19,8 @@
       <section class="stage" id="stage">
         <div class="video-wrap" id="video-wrap">
           <img id="mjpeg" alt="stream MJPEG" />
+          <canvas id="heatmap-canvas" class="overlay-canvas"></canvas>
+          <canvas id="paths-canvas" class="overlay-canvas"></canvas>
           <canvas id="overlay" width="1280" height="720"></canvas>
           <div id="new-item-banner" class="new-item-banner"></div>
         </div>
@@ -30,16 +32,30 @@
           <span class="kbd">R</span> boost &nbsp;
           <span class="kbd">0</span> reset &nbsp;
           <span class="kbd">drag</span> pan &nbsp;
-          <span class="kbd">scroll</span> zoom
+          <span class="kbd">scroll</span> zoom &nbsp;
+          <span class="kbd">click bbox</span> nomear
         </div>
       </section>
 
       <aside class="side">
+        <h2>Painel de Sistema</h2>
+        <div id="system-panel" class="system-panel"></div>
+
+        <h2>Heatmap (por classe)</h2>
+        <div class="heatmap-tabs" id="heatmap-tabs">
+          <button class="tab active" data-cls="">todas</button>
+        </div>
+        <p class="muted small">
+          Heatmap acumula gaussianas nos centros dos bboxes ao longo do turno,
+          com decay temporal. Separa por classe pra você ver padrões distintos
+          (galinhas, pessoas, caixas).
+        </p>
+
         <h2>Classes identificadas</h2>
         <p class="muted small">
-          Itens novos são auto-nomeados como <code>ItemN</code>. Clique em
-          <em>renomear</em> para dar um nome real. Próximas detecções com aparência
-          similar serão reconhecidas automaticamente.
+          Itens novos são auto-nomeados como <code>ItemN</code>. Renomeie pela
+          sidebar ou clicando direto na bbox do vídeo. Ao renomear, fica
+          fixado no SQLite — próximo turno já reconhece.
         </p>
         <div id="labels-list" class="labels-list"></div>
 
@@ -67,7 +83,7 @@
           <dt>câmera</dt><dd id="cv-camera">—</dd>
           <dt>modelo</dt><dd id="cv-model">—</dd>
           <dt>resolução</dt><dd id="cv-resolution">—</dd>
-          <dt>linha</dt><dd id="cv-line">—</dd>
+          <dt>db</dt><dd id="cv-db">—</dd>
         </dl>
       </aside>
     </main>

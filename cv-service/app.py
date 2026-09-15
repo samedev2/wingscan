@@ -1,23 +1,29 @@
 """
-cv-service v2: webcam -> YOLO (genérico) -> ByteTrack -> ReID + classifier
-   -> TrackNamer -> counter IN/OUT -> MJPEG anotado + WS eventos + WS novos itens.
+cv-service v3: webcam -> YOLO (genérico) -> ByteTrack -> ReID + classifier
+   -> TrackNamer -> counter IN/OUT -> MJPEG anotado + WS eventos
+   -> PanelRepo (SQLite) + Heatmap (por classe) + PathTracker
 
-Endpoint novos (v2):
-  GET    /api/labels         -> lista classes nomeadas
-  PATCH  /api/labels/<old>   -> renomeia classe (body: {"new_name": "galinha"})
-  DELETE /api/labels/<name>  -> remove classe (apaga embeddings dela)
+Novidades v3:
+  - GET    /api/panel             -> configurações persistidas (settings)
+  - PATCH  /api/panel             -> salva settings em bulk
+  - GET    /api/heatmap.png       -> heatmap atual (PNG) [cls opcional via ?cls=NOME]
+  - GET    /api/paths             -> trilhas ativas (JSON)
+  - GET    /api/heatmap/info      -> info do heatmap (classes + decay)
+  - DELETE /api/heatmap           -> zera heatmap (opcional cls via ?cls=NOME)
 """
 from __future__ import annotations
 
 import asyncio
 import base64
+import io
+import json
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 import cv2
 import numpy as np
 import supervision as sv
-from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -27,9 +33,13 @@ from counter import Counter
 from detector import Detector
 from labels import LabelsStore
 from namer import TrackNamer
+from panel.db import Database
+from panel.repo import PanelRepo
 from reid import ReIDEncoder
 from storage import Storage
 from tracker import Tracker
+from tracking.heatmap import Heatmap
+from tracking.path_tracker import PathTracker
 
 
 class AppState:
@@ -42,6 +52,12 @@ class AppState:
     namer: TrackNamer | None = None
     counter: Counter | None = None
     storage: Storage | None = None
+    # v3
+    db: Database | None = None
+    repo: PanelRepo | None = None
+    heatmap: Heatmap | None = None
+    paths: PathTracker | None = None
+    # controle
     running: bool = False
     latest_jpeg: bytes = b""
     latest_contagens: dict = {}
@@ -55,7 +71,6 @@ state = AppState()
 
 
 def _crop_to_b64(frame: np.ndarray, bbox: tuple, size: int = 160) -> str:
-    """Recorta bbox, redimensiona para `size x size` e retorna JPEG em base64."""
     x1, y1, x2, y2 = bbox
     h, w = frame.shape[:2]
     x1 = max(0, min(int(x1), w - 1))
@@ -77,11 +92,9 @@ def _crop_to_b64(frame: np.ndarray, bbox: tuple, size: int = 160) -> str:
 def _on_new_item(
     track_id: int, name: str, sim: float, frame: np.ndarray, bbox: tuple, embedding
 ) -> None:
-    """Callback chamado pelo TrackNamer quando item novo é detectado.
-
-    Enfileira um broadcast para o event loop do FastAPI. Usamos call_soon_threadsafe
-    porque o TrackNamer pode ser chamado de uma threadpool (asyncio.to_thread).
-    """
+    """Callback do TrackNamer quando descobre item novo. Já com auto-fix: tudo que
+    recebe nome (ItemN auto) é salvo no SQLite via PanelRepo com fixed=0; se o
+    usuário depois renomeia via PATCH, repo.rename() faz merge e fixed=1."""
     crop_b64 = _crop_to_b64(frame, bbox)
     payload: dict[str, Any] = {
         "type": "novo_item",
@@ -90,6 +103,12 @@ def _on_new_item(
         "sim": round(sim, 3),
         "crop": crop_b64,
     }
+    # Persiste no SQLite (fixed=0 enquanto não renomeado)
+    if state.repo is not None and embedding is not None:
+        try:
+            state.repo.upsert_label(name, [embedding], fixed=False)
+        except Exception as e:
+            print(f"[db] upsert_label falhou: {e}")
 
     async def _broadcast():
         for ws in list(state.ws_clients):
@@ -108,7 +127,6 @@ def _on_new_item(
 
 
 async def _process_loop() -> None:
-    """Loop principal: lê frame, detecta, rastreia, nomeia, conta, anota."""
     box_annotator = sv.BoxAnnotator()
     label_annotator = sv.LabelAnnotator()
 
@@ -126,12 +144,46 @@ async def _process_loop() -> None:
         if (w, h) != (state.frame_w, state.frame_h):
             state.frame_w, state.frame_h = w, h
             state.counter.configure_frame(h, w)
+            # Reset heatmap ao mudar resolução
+            if state.heatmap is not None:
+                state.heatmap = Heatmap(
+                    (h, w),
+                    kernel_radius=settings.heatmap_radius,
+                    decay=settings.heatmap_decay,
+                )
 
         detections = state.detector.detect(frame)
         tracks = state.tracker.update(detections)
 
-        # Resolve nome de cada track (ReID + classifier, ou auto ItemN)
+        # Resolve nome (cache + auto ItemN)
         tracks = state.namer.resolve(tracks, frame)
+
+        # Heatmap por classe
+        if state.heatmap is not None and settings.heatmap_enabled:
+            try:
+                for i in range(len(tracks)):
+                    if tracks.tracker_id is None or tracks.tracker_id[i] is None:
+                        continue
+                    cls_name = state.counter.cls_name(tracks, i)
+                    x1, y1, x2, y2 = tracks.xyxy[i]
+                    cx = int((x1 + x2) / 2)
+                    cy = int((y1 + y2) / 2)
+                    state.heatmap.add(cls_name, (cx, cy))
+            except Exception as e:
+                print(f"[heatmap] erro: {e}")
+
+        # Path tracking
+        if state.paths is not None and settings.paths_enabled:
+            for i in range(len(tracks)):
+                if tracks.tracker_id is None or tracks.tracker_id[i] is None:
+                    continue
+                tid = int(tracks.tracker_id[i])
+                cls_name = state.counter.cls_name(tracks, i)
+                x1, y1, x2, y2 = tracks.xyxy[i]
+                cx = (x1 + x2) / 2.0
+                cy = (y1 + y2) / 2.0
+                state.paths.update(tid, cls_name, (cx, cy))
+            state.paths.expire()
 
         eventos = state.counter.update(tracks)
 
@@ -152,7 +204,7 @@ async def _process_loop() -> None:
                     except Exception:
                         state.ws_clients.discard(ws)
 
-        # Anota frame
+        # Anota frame com bounding boxes
         annotated = frame.copy()
         try:
             if len(tracks) > 0 and tracks.tracker_id is not None:
@@ -183,11 +235,19 @@ async def _process_loop() -> None:
                 (max(10, x_line + 4), 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1,
             )
 
+        # Paths overlay (desenha trilhas por cima)
+        if state.paths is not None and settings.paths_enabled:
+            for d in state.paths.to_dict_list():
+                pts = np.array([(p[0], p[1]) for p in d["points"]], dtype=np.int32)
+                if len(pts) >= 2:
+                    cv2.polylines(annotated, [pts], False, (88, 166, 255), 2, cv2.LINE_AA)
+                    cv2.circle(annotated, tuple(pts[-1]), 4, (88, 166, 255), -1)
+
         # HUD
         y = 24
         if state.storage is not None:
             cv2.putText(
-                annotated, f"camera: {state.storage.camera_id}",
+                annotated, f"camera: {state.storage.camera_id}  turno: {state.storage.turno_id}",
                 (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1,
             )
             y += 20
@@ -201,6 +261,35 @@ async def _process_loop() -> None:
 
         state.latest_jpeg = _to_jpeg(annotated)
         state.latest_contagens = state.counter.estado()
+
+        # A cada ~5 frames, envia snapshot das tracks atuais via WS
+        # (usado pelo front pra hit-test no canvas do InlineNamer).
+        state._frame_counter = getattr(state, "_frame_counter", 0) + 1
+        if state._frame_counter % 5 == 0 and len(tracks) > 0:
+            try:
+                tracks_payload = []
+                for i in range(len(tracks)):
+                    if tracks.tracker_id is None or tracks.tracker_id[i] is None:
+                        continue
+                    tid = int(tracks.tracker_id[i])
+                    cls_name = state.counter.cls_name(tracks, i)
+                    x1, y1, x2, y2 = tracks.xyxy[i]
+                    conf = float(tracks.confidence[i]) if tracks.confidence is not None else 0.0
+                    tracks_payload.append({
+                        "track_id": tid,
+                        "cls_name": cls_name,
+                        "bbox": [float(x1), float(y1), float(x2), float(y2)],
+                        "conf": round(conf, 3),
+                    })
+                snap = {"type": "tracks", "tracks": tracks_payload}
+                for ws in list(state.ws_clients):
+                    try:
+                        await ws.send_json(snap)
+                    except Exception:
+                        state.ws_clients.discard(ws)
+            except Exception as e:
+                print(f"[warn] tracks snapshot falhou: {e}")
+
         await asyncio.sleep(0)
 
 
@@ -211,13 +300,19 @@ def _to_jpeg(frame: np.ndarray, quality: int = 70) -> bytes:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    print("[startup] cv-service v2 inicializando...")
+    print("[startup] cv-service v3 inicializando...")
     print(
         f"  camera_index={settings.camera_index} "
         f"{settings.width}x{settings.height}@{settings.fps}fps"
     )
     print(f"  model={settings.model} conf={settings.confidence}")
     print(f"  reid_threshold={settings.reid_threshold} device={settings.reid_device}")
+    print(f"  db={settings.db_path} heatmap={settings.heatmap_enabled} paths={settings.paths_enabled}")
+
+    # SQLite (panel)
+    state.db = Database(settings.db_path)
+    state.db.connect()
+    state.repo = PanelRepo(state.db)
 
     state.cap = cv2.VideoCapture(settings.camera_index)
     if not state.cap.isOpened():
@@ -253,14 +348,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     state.storage.iniciar_turno()
 
-    # Captura event loop para o callback do namer (roda em threadpool)
     state.pending_namer_loop = asyncio.get_running_loop()
 
-    # Dimensões reais
     ok, probe = await asyncio.to_thread(state.cap.read)
     if ok and probe is not None:
         state.frame_h, state.frame_w = probe.shape[:2]
         state.counter.configure_frame(state.frame_h, state.frame_w)
+        state.heatmap = Heatmap(
+            (state.frame_h, state.frame_w),
+            kernel_radius=settings.heatmap_radius,
+            decay=settings.heatmap_decay,
+        )
+        state.paths = PathTracker(
+            max_points_per_track=settings.path_max_points,
+            max_age_seconds=settings.path_max_age,
+        )
         print(f"  frame real: {state.frame_w}x{state.frame_h}")
 
     state.running = True
@@ -280,12 +382,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             print(f"[shutdown] Turno finalizado: {state.storage.json_path}")
         if state.cap:
             state.cap.release()
+        if state.db:
+            state.db.close()
         print("[shutdown] OK")
 
 
 app = FastAPI(
     title="controle-de-movimento cv-service",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -300,12 +404,12 @@ app.add_middleware(
 async def root():
     return {
         "service": "cv-service",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "endpoints": [
-            "/api/state",
-            "/api/labels (GET/PATCH/DELETE)",
-            "/video_feed (MJPEG)",
-            "/api/frame.jpg",
+            "/api/state", "/api/labels (GET/PATCH/DELETE)",
+            "/api/panel (GET/PATCH)", "/api/heatmap.png", "/api/heatmap/info",
+            "/api/paths",
+            "/video_feed (MJPEG)", "/api/frame.jpg",
             "/ws/events (WebSocket)",
         ],
     }
@@ -322,6 +426,8 @@ async def api_state():
         "line_position": settings.line_position,
         "contagens": state.latest_contagens,
         "labels_count": len(state.labels.list_names()) if state.labels else 0,
+        "heatmap_enabled": settings.heatmap_enabled,
+        "paths_enabled": settings.paths_enabled,
     })
 
 
@@ -348,7 +454,15 @@ async def api_labels_rename(old_name: str, request: Request):
             {"error": f"não consegui renomear {old_name!r} → {new_name!r}"},
             status_code=400,
         )
-    return JSONResponse({"ok": True, "renamed": True, "from": old_name, "to": new_name})
+    # Sincroniza no SQLite (auto-fix: ao renomear, vira fixed=1)
+    if state.repo is not None:
+        try:
+            state.repo.rename_label(old_name, new_name)
+            state.repo.set_fixed(new_name, True)
+            state.repo.log_event("label_renamed", {"from": old_name, "to": new_name})
+        except Exception as e:
+            print(f"[db] rename falhou: {e}")
+    return JSONResponse({"ok": True, "renamed": True, "from": old_name, "to": new_name, "fixed": True})
 
 
 @app.delete("/api/labels/{name}")
@@ -356,10 +470,83 @@ async def api_labels_delete(name: str):
     if not state.labels:
         return JSONResponse({"error": "labels not ready"}, status_code=503)
     ok = state.labels.remove(name)
+    if state.repo is not None:
+        try:
+            state.repo.delete_label(name)
+        except Exception as e:
+            print(f"[db] delete falhou: {e}")
     if not ok:
         return JSONResponse({"error": f"classe {name!r} não existe"}, status_code=404)
     return JSONResponse({"ok": True, "removed": name})
 
+
+# ============ PAINEL v3 ============
+
+@app.get("/api/panel")
+async def api_panel_get():
+    if not state.repo:
+        return JSONResponse({})
+    return JSONResponse(state.repo.get_settings())
+
+
+@app.patch("/api/panel")
+async def api_panel_patch(request: Request):
+    if not state.repo:
+        return JSONResponse({"error": "db not ready"}, status_code=503)
+    body = await request.json()
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body precisa ser objeto"}, status_code=400)
+    state.repo.set_settings_bulk(body)
+    state.repo.log_event("panel_settings_changed", {"keys": list(body.keys())})
+    # Aplica mudanças em runtime (settings runtime só de leitura, mas alguns
+    # valores como line_position podem atualizar o counter dinamicamente).
+    if "line_position" in body and state.counter is not None:
+        state.counter.line_position = float(body["line_position"])
+    if "line_orientation" in body and state.counter is not None:
+        state.counter.line_orientation = str(body["line_orientation"])
+    return JSONResponse({"ok": True, "saved": list(body.keys())})
+
+
+@app.get("/api/heatmap/info")
+async def api_heatmap_info():
+    if state.heatmap is None:
+        return JSONResponse({"enabled": False})
+    return JSONResponse({
+        "enabled": settings.heatmap_enabled,
+        "decay": settings.heatmap_decay,
+        "radius": settings.heatmap_radius,
+        "classes": state.heatmap.classes(),
+        "shape": [state.frame_h, state.frame_w],
+    })
+
+
+@app.get("/api/heatmap.png")
+async def api_heatmap_png(cls: str | None = Query(default=None)):
+    if state.heatmap is None or not settings.heatmap_enabled:
+        return Response(status_code=204)
+    img = state.heatmap.render(cls_name=cls)
+    ok, buf = cv2.imencode(".png", img)
+    if not ok:
+        return Response(status_code=500)
+    return Response(content=buf.tobytes(), media_type="image/png")
+
+
+@app.delete("/api/heatmap")
+async def api_heatmap_clear(cls: str | None = Query(default=None)):
+    if state.heatmap is None:
+        return Response(status_code=204)
+    state.heatmap.reset(cls_name=cls)
+    return JSONResponse({"ok": True, "reset": cls or "all"})
+
+
+@app.get("/api/paths")
+async def api_paths():
+    if state.paths is None:
+        return JSONResponse({"paths": []})
+    return JSONResponse({"paths": state.paths.to_dict_list()})
+
+
+# ============ STREAM ============
 
 @app.get("/video_feed")
 async def video_feed():
@@ -399,6 +586,7 @@ async def ws_events(ws: WebSocket):
             "line_orientation": settings.line_orientation,
             "line_position": settings.line_position,
             "labels": state.labels.summary() if state.labels else [],
+            "panel": state.repo.get_settings() if state.repo else {},
         })
         while True:
             try:

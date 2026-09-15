@@ -5,9 +5,10 @@
  *   - init:        estado inicial ao conectar
  *   - evento:      cruzamento de linha (IN/OUT)
  *   - novo_item:   detecção de item nunca visto — auto-nomeado ItemN
+ *   - tracks:      snapshot das tracks atuais (pra hit-test no canvas)
  *   - ping:        keep-alive
  */
-export type EventKind = "init" | "evento" | "novo_item" | "ping";
+export type EventKind = "init" | "evento" | "novo_item" | "tracks" | "ping";
 
 export interface CrossEvent {
   type: "evento";
@@ -25,6 +26,7 @@ export interface InitEvent {
   line_orientation: "horizontal" | "vertical";
   line_position: number;
   labels: Array<{ name: string; samples: number; created_at?: string }>;
+  panel: Record<string, unknown>;
 }
 
 export interface NewItemEvent {
@@ -35,7 +37,19 @@ export interface NewItemEvent {
   crop: string; // base64 JPEG
 }
 
-export type WsEvent = InitEvent | CrossEvent | NewItemEvent | { type: "ping" };
+export interface TrackSnapEntry {
+  track_id: number;
+  cls_name: string;
+  bbox: [number, number, number, number];
+  conf: number;
+}
+
+export interface TracksEvent {
+  type: "tracks";
+  tracks: TrackSnapEntry[];
+}
+
+export type WsEvent = InitEvent | CrossEvent | NewItemEvent | TracksEvent | { type: "ping" };
 
 export class EventsClient {
   private url: string;

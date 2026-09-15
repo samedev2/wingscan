@@ -50,10 +50,19 @@ class Settings:
     camera_id: str = _env_str("CV_CAMERA_ID", "webcam-0")
     turno_dir: str = _env_str("CV_TURNO_DIR", "data/turnos")
 
-    # ReID
+    # ReID + labels (legado JSON, mantido p/ retrocompat)
     reid_threshold: float = _env_float("CV_REID_THRESHOLD", 0.65)
-    reid_device: str = _env_str("CV_REID_DEVICE", "auto")  # auto|cuda|cpu
+    reid_device: str = _env_str("CV_REID_DEVICE", "auto")
     labels_path: str = _env_str("CV_LABELS_PATH", "data/labels.json")
+
+    # Painel v3 — SQLite + tracking
+    db_path: str = _env_str("CV_DB_PATH", "data/controle.db")
+    heatmap_enabled: bool = _env_str("CV_HEATMAP", "1") not in ("0", "false", "")
+    paths_enabled: bool = _env_str("CV_PATHS", "1") not in ("0", "false", "")
+    heatmap_decay: float = _env_float("CV_HEATMAP_DECAY", 0.985)
+    heatmap_radius: int = _env_int("CV_HEATMAP_RADIUS", 14)
+    path_max_points: int = _env_int("CV_PATH_MAX_POINTS", 80)
+    path_max_age: float = _env_float("CV_PATH_MAX_AGE", 8.0)
 
     # Server
     host: str = _env_str("CV_HOST", "127.0.0.1")

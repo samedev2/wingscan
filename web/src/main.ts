@@ -1,8 +1,11 @@
 /**
- * Entry point v3: orquestra MJPEG, WS eventos, PTZ virtual, naming panel,
- * system panel, heatmap/paths overlay, inline namer.
+ * Entry point v4: orquestra MJPEG, WS eventos, PTZ virtual, naming panel,
+ * analytics panel, system panel, heatmap/paths overlay, inline namer.
+ *
+ * Mudanças v4: layout mudou para dois painéis (vídeo à esquerda, analytics à
+ * direita). Painel de Sistema / Heatmap / Classes / Counter / Eventos ficam
+ * atrás de <details> para não competir com o painel de analytics.
  */
-import { MjpegClient } from "./stream/MjpegClient";
 import { JpegPollingClient } from "./stream/JpegPollingClient";
 import { EventsClient, type WsEvent } from "./stream/EventsClient";
 import { CounterPanel } from "./counter/CounterPanel";
@@ -14,6 +17,7 @@ import { HeatmapOverlay } from "./canvas/HeatmapOverlay";
 import { PathOverlay } from "./canvas/PathOverlay";
 import { PTZOverlay } from "./ptz/Overlay";
 import { VirtualPTZ } from "./ptz/VirtualPTZ";
+import { AnalyticsPanel } from "./analytics/AnalyticsPanel";
 
 const CV_BASE = (import.meta.env?.VITE_CV_BASE as string | undefined) ?? "/cv";
 
@@ -44,13 +48,7 @@ function init(): void {
   const connText = $("conn-text") as HTMLSpanElement;
   const systemPanel = $("system-panel") as HTMLDivElement;
   const heatmapTabs = $("heatmap-tabs") as HTMLDivElement;
-
-  const cvUrl = $("cv-url") as HTMLElement;
-  const cvCamera = $("cv-camera") as HTMLElement;
-  const cvModel = $("cv-model") as HTMLElement;
-  const cvRes = $("cv-resolution") as HTMLElement;
-  const cvDb = $("cv-db") as HTMLElement;
-  cvUrl.textContent = CV_BASE === "/cv" ? "(proxy Vite → 127.0.0.1:8000)" : CV_BASE;
+  const analyticsEl = $("analytics") as HTMLDivElement;
 
   // PTZ + Overlay
   const overlay = new PTZOverlay(overlayCanvas);
@@ -58,14 +56,11 @@ function init(): void {
   ptz.start();
   ptz.onChange((s) => overlay.update(s));
 
-  // v3 overlays
   const heatmapOv = new HeatmapOverlay(heatmapCanvas, CV_BASE);
   const pathOv = new PathOverlay(pathsCanvas, CV_BASE);
-
-  // v3 inline namer (click na bbox)
   const inlineNamer = new InlineNamer(document.body, heatmapCanvas, CV_BASE);
+  const analyticsPanel = new AnalyticsPanel(analyticsEl);
 
-  // Panel store + system panel
   const panelStore = new PanelStore(CV_BASE, (s) => {
     systemPanelUi.setSettings(s);
   });
@@ -81,15 +76,13 @@ function init(): void {
     pathOv.setEnabled(on);
   };
 
-  // Drag no stage = pan/tilt (manual, fora do spatial-controls)
   const videoWrap = $("video-wrap") as HTMLDivElement;
   let dragging = false;
   let lastX = 0;
   let lastY = 0;
   videoWrap.addEventListener("pointerdown", (e) => {
-    // só inicia drag se o clique não foi em uma bbox (o InlineNamer cuida do hit-test)
     const target = e.target as HTMLElement;
-    if (target.tagName === "CANVAS") return; // deixa o InlineNamer tratar
+    if (target.tagName === "CANVAS") return;
     dragging = true;
     lastX = e.clientX;
     lastY = e.clientY;
@@ -121,7 +114,6 @@ function init(): void {
     { passive: false },
   );
 
-  // Click handler nos canvas (heat/paths/overlay) pra InlineNamer
   const onCanvasClick = (canvas: HTMLCanvasElement) => (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
     const vx = e.clientX - rect.left;
@@ -136,7 +128,6 @@ function init(): void {
     if (e.code === "Digit0") ptz.reset();
   });
 
-  // Painéis
   const counter = new CounterPanel(counterBody);
   const naming = new NamingPanel(labelsList);
 
@@ -159,38 +150,25 @@ function init(): void {
       if (r.ok) {
         await refreshLabels();
         await refreshHeatmapClasses();
-      } else {
-        const err = await r.json().catch(() => ({}));
-        alert(`Falha ao renomear: ${err.error || r.status}`);
       }
     } catch (e) {
       alert(`Erro: ${e}`);
     }
   };
-
   naming.onDelete = async (name) => {
     try {
-      const r = await fetch(`${CV_BASE}/api/labels/${encodeURIComponent(name)}`, {
-        method: "DELETE",
-      });
+      const r = await fetch(`${CV_BASE}/api/labels/${encodeURIComponent(name)}`, { method: "DELETE" });
       if (r.ok) {
         await refreshLabels();
         await refreshHeatmapClasses();
-      } else {
-        const err = await r.json().catch(() => ({}));
-        alert(`Falha ao apagar: ${err.error || r.status}`);
       }
-    } catch (e) {
-      alert(`Erro: ${e}`);
-    }
+    } catch (e) { alert(`Erro: ${e}`); }
   };
-
-  inlineNamer.setOnRename((_old, _new) => {
+  inlineNamer.setOnRename(() => {
     refreshLabels();
     refreshHeatmapClasses();
   });
 
-  // Heatmap tabs
   heatmapTabs.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest("button.tab") as HTMLButtonElement | null;
     if (!btn) return;
@@ -228,11 +206,9 @@ function init(): void {
     }
   }
 
-  // Stream
   const stream = new JpegPollingClient(mjpegImg, CV_BASE, 120);
   stream.start();
 
-  // WS events
   const events = new EventsClient(wsUrlFor(CV_BASE));
   events.start((connected) => setStatus(connected));
 
@@ -240,29 +216,18 @@ function init(): void {
 
   events.onEvent((e: WsEvent) => {
     if (e.type === "init") {
-      cvCamera.textContent = "—";
-      cvModel.textContent = "—";
-      cvRes.textContent = `${e.resolution[0]}×${e.resolution[1]}`;
       counter.setState(e.contagens);
       naming.setLabels(e.labels || []);
+      if (e.analytics) analyticsPanel.setAnalytics(e.analytics);
+      if (e.sensor) analyticsPanel.setSensor(e.sensor);
       if (e.panel && Object.keys(e.panel).length > 0) {
         systemPanelUi.setSettings(e.panel as never);
       }
-      fetch(`${CV_BASE}/api/state`)
-        .then((r) => r.json())
-        .then((s) => {
-          if (s.camera_id) cvCamera.textContent = s.camera_id;
-          if (s.model) cvModel.textContent = s.model;
-          if (s.resolution) cvRes.textContent = s.resolution;
-          if (s.heatmap_enabled !== undefined) heatmapOv.setEnabled(s.heatmap_enabled);
-          if (s.paths_enabled !== undefined) pathOv.setEnabled(s.paths_enabled);
-          cvDb.textContent = "controle.db";
-        })
-        .catch(() => {});
-      refreshHeatmapClasses();
       panelStore.load();
       heatmapOv.start();
       pathOv.start();
+      refreshHeatmapClasses();
+      refreshTimeline();
     } else if (e.type === "evento") {
       const li = document.createElement("li");
       li.className = e.direcao;
@@ -277,7 +242,6 @@ function init(): void {
           <div class="muted">novo item detectado</div>
           <div class="new-item-name">${escapeHtml(e.name)}</div>
           <div class="muted small">track #${e.track_id} · similaridade máx ${(e.sim * 100).toFixed(0)}%</div>
-          <div class="muted small">renomeie na lista ou clicando na bbox</div>
         </div>
       `;
       newItemBanner.classList.add("show");
@@ -290,19 +254,31 @@ function init(): void {
       refreshHeatmapClasses();
     } else if (e.type === "tracks") {
       inlineNamer.setTracks(e.tracks as TrackInfo[]);
-    } else if (e.type === "ping") {
-      // keep-alive
-    }
+    } else if (e.type === "ping") { /* keep-alive */ }
   });
 
+  // Polling: estado + analytics + sensor + timeline
   setInterval(async () => {
     try {
       const r = await fetch(`${CV_BASE}/api/state`);
       if (!r.ok) return;
       const s = await r.json();
+      if (s.analytics) analyticsPanel.setAnalytics(s.analytics);
+      if (s.sensor) analyticsPanel.setSensor(s.sensor);
       if (s.contagens) counter.setState(s.contagens);
     } catch { /* ok */ }
   }, 1000);
+
+  async function refreshTimeline(): Promise<void> {
+    try {
+      const r = await fetch(`${CV_BASE}/api/timeline?hours=24`);
+      if (!r.ok) return;
+      const data = (await r.json()) as { entries: { ts: number; total: number; ativa: number; repouso: number; anomalo: number; normal: number; }[] };
+      analyticsPanel.setTimeline(data.entries || []);
+    } catch { /* ok */ }
+  }
+  // Atualiza timeline a cada 60s
+  setInterval(refreshTimeline, 60000);
 
   function setStatus(ok: boolean): void {
     if (ok) {
@@ -316,11 +292,7 @@ function init(): void {
 }
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function runInit(): void {

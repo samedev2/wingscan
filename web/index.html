@@ -3,20 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Controle de Movimento</title>
+    <title>Wingscam — Controle de Movimento</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header class="topbar">
-      <h1>Controle de Movimento</h1>
-      <div class="status" id="status">
-        <span class="dot" id="conn-dot"></span>
-        <span id="conn-text">conectando…</span>
-      </div>
-    </header>
-
-    <main class="layout">
-      <section class="stage" id="stage">
+    <main class="app-layout">
+      <section class="left-pane">
         <div class="video-wrap" id="video-wrap">
           <img id="mjpeg" alt="stream MJPEG" />
           <canvas id="heatmap-canvas" class="overlay-canvas"></canvas>
@@ -25,66 +17,65 @@
           <div id="new-item-banner" class="new-item-banner"></div>
         </div>
 
-        <div class="hud" id="hud">
-          <span class="kbd">A/D</span> pan &nbsp;
-          <span class="kbd">W/S</span> zoom &nbsp;
-          <span class="kbd">↑/↓</span> tilt &nbsp;
-          <span class="kbd">R</span> boost &nbsp;
-          <span class="kbd">0</span> reset &nbsp;
-          <span class="kbd">drag</span> pan &nbsp;
-          <span class="kbd">scroll</span> zoom &nbsp;
-          <span class="kbd">click bbox</span> nomear
+        <div class="player-bar">
+          <div class="player-time">
+            <span class="kbd">A/D</span> pan &nbsp;
+            <span class="kbd">W/S</span> zoom &nbsp;
+            <span class="kbd">↑/↓</span> tilt &nbsp;
+            <span class="kbd">R</span> boost &nbsp;
+            <span class="kbd">0</span> reset &nbsp;
+            <span class="kbd">drag</span> pan &nbsp;
+            <span class="kbd">scroll</span> zoom &nbsp;
+            <span class="kbd">click bbox</span> nomear
+          </div>
+          <div class="status" id="status">
+            <span class="dot" id="conn-dot"></span>
+            <span id="conn-text">conectando…</span>
+          </div>
         </div>
       </section>
 
-      <aside class="side">
-        <h2>Painel de Sistema</h2>
-        <div id="system-panel" class="system-panel"></div>
+      <aside class="right-pane">
+        <div id="analytics" class="analytics"></div>
 
-        <h2>Heatmap (por classe)</h2>
-        <div class="heatmap-tabs" id="heatmap-tabs">
-          <button class="tab active" data-cls="">todas</button>
-        </div>
-        <p class="muted small">
-          Heatmap acumula gaussianas nos centros dos bboxes ao longo do turno,
-          com decay temporal. Separa por classe pra você ver padrões distintos
-          (galinhas, pessoas, caixas).
-        </p>
+        <details class="adv-panel">
+          <summary>Painel de Sistema (avançado)</summary>
+          <div id="system-panel" class="system-panel"></div>
+        </details>
 
-        <h2>Classes identificadas</h2>
-        <p class="muted small">
-          Itens novos são auto-nomeados como <code>ItemN</code>. Renomeie pela
-          sidebar ou clicando direto na bbox do vídeo. Ao renomear, fica
-          fixado no SQLite — próximo turno já reconhece.
-        </p>
-        <div id="labels-list" class="labels-list"></div>
+        <details class="adv-panel">
+          <summary>Heatmap (por classe)</summary>
+          <div class="heatmap-tabs" id="heatmap-tabs">
+            <button class="tab active" data-cls="">todas</button>
+          </div>
+        </details>
 
-        <h2>Contagem</h2>
-        <table id="counter-table">
-          <thead>
-            <tr>
-              <th>classe</th>
-              <th>IN</th>
-              <th>OUT</th>
-              <th>ativos</th>
-            </tr>
-          </thead>
-          <tbody id="counter-body">
-            <tr><td colspan="4" class="muted">aguardando dados…</td></tr>
-          </tbody>
-        </table>
+        <details class="adv-panel">
+          <summary>Classes identificadas</summary>
+          <p class="muted small">
+            Clique direto na bbox do vídeo ou renomeie aqui. Ao renomear, fica fixado no SQLite.
+          </p>
+          <div id="labels-list" class="labels-list"></div>
+        </details>
 
-        <h2>Eventos</h2>
-        <ul id="events" class="events"></ul>
+        <details class="adv-panel">
+          <summary>Contagem IN/OUT</summary>
+          <table id="counter-table">
+            <thead>
+              <tr>
+                <th>classe</th><th>IN</th><th>OUT</th><th>ativos</th>
+              </tr>
+            </thead>
+            <tbody id="counter-body">
+              <tr><td colspan="4" class="muted">aguardando dados…</td></tr>
+            </tbody>
+          </table>
+        </details>
 
-        <h2>Conexão</h2>
-        <dl class="meta">
-          <dt>cv-service</dt><dd id="cv-url">http://127.0.0.1:8000</dd>
-          <dt>câmera</dt><dd id="cv-camera">—</dd>
-          <dt>modelo</dt><dd id="cv-model">—</dd>
-          <dt>resolução</dt><dd id="cv-resolution">—</dd>
-          <dt>db</dt><dd id="cv-db">—</dd>
-        </dl>
+        <details class="adv-panel">
+          <summary>Eventos recentes</summary>
+          <ul id="events" class="events"></ul>
+        </details>
       </aside>
     </main>
 

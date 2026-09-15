@@ -1,22 +1,26 @@
 """
-cv-service v3: webcam -> YOLO (genérico) -> ByteTrack -> ReID + classifier
-   -> TrackNamer -> counter IN/OUT -> MJPEG anotado + WS eventos
-   -> PanelRepo (SQLite) + Heatmap (por classe) + PathTracker
+cv-service v4: webcam → YOLO → ByteTrack → ReID → Namer → BehaviorAnalyzer
+   → Counter → SQLite → MJPEG anotado + WS eventos + Sensors simulado
 
-Novidades v3:
-  - GET    /api/panel             -> configurações persistidas (settings)
-  - PATCH  /api/panel             -> salva settings em bulk
-  - GET    /api/heatmap.png       -> heatmap atual (PNG) [cls opcional via ?cls=NOME]
-  - GET    /api/paths             -> trilhas ativas (JSON)
-  - GET    /api/heatmap/info      -> info do heatmap (classes + decay)
-  - DELETE /api/heatmap           -> zera heatmap (opcional cls via ?cls=NOME)
+v4 (a partir de v3-painel-controle):
+  - behavior/analyzer.py classifica cada track em normal/ativa/repouso/anomala
+    usando 5 regras: velocidade, static_seconds, aspect_ratio, isolamento, erratic
+  - sensors/environment.py gera temp/umidade simulados (oscilação senoidal)
+  - bbox desenhada agora colorida pelo estado (verde/laranja/cinza/vermelho)
+  - trilha colorida pelo estado da galinha
+  - novos endpoints:
+      GET    /api/analytics          métricas (total/normal/ativa/repouso/anomala)
+      GET    /api/sensors            temperatura + umidade (atual)
+      GET    /api/timeline?hours=N   série temporal de contagens
+      GET    /api/state              agora inclui sensor + analytics
+  - SQLite: nova tabela timeline_snapshots (1 min, persiste 24h)
 """
 from __future__ import annotations
 
 import asyncio
 import base64
-import io
 import json
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
@@ -27,6 +31,8 @@ from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisco
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from behavior.analyzer import BehaviorAnalyzer
+from behavior.states import STATE_COLOR_BGR, State
 from classifier import EmbeddingClassifier
 from config import settings
 from counter import Counter
@@ -36,6 +42,7 @@ from namer import TrackNamer
 from panel.db import Database
 from panel.repo import PanelRepo
 from reid import ReIDEncoder
+from sensors.environment import SimulatedEnvironmentSensor
 from storage import Storage
 from tracker import Tracker
 from tracking.heatmap import Heatmap
@@ -52,19 +59,24 @@ class AppState:
     namer: TrackNamer | None = None
     counter: Counter | None = None
     storage: Storage | None = None
-    # v3
     db: Database | None = None
     repo: PanelRepo | None = None
     heatmap: Heatmap | None = None
     paths: PathTracker | None = None
-    # controle
+    behavior: BehaviorAnalyzer | None = None
+    sensor: SimulatedEnvironmentSensor | None = None
     running: bool = False
     latest_jpeg: bytes = b""
     latest_contagens: dict = {}
+    latest_analytics: dict = {}
+    latest_states: dict = {}  # track_id -> state
     frame_h: int = 720
     frame_w: int = 1280
     ws_clients: set[WebSocket] = set()
     pending_namer_loop: asyncio.AbstractEventLoop | None = None
+    # timeline in-memory das últimas N leituras (1 por minuto)
+    timeline_history: deque = deque(maxlen=24 * 60)  # 24h em minutos
+    last_timeline_ts: float = 0.0
 
 
 state = AppState()
@@ -92,9 +104,6 @@ def _crop_to_b64(frame: np.ndarray, bbox: tuple, size: int = 160) -> str:
 def _on_new_item(
     track_id: int, name: str, sim: float, frame: np.ndarray, bbox: tuple, embedding
 ) -> None:
-    """Callback do TrackNamer quando descobre item novo. Já com auto-fix: tudo que
-    recebe nome (ItemN auto) é salvo no SQLite via PanelRepo com fixed=0; se o
-    usuário depois renomeia via PATCH, repo.rename() faz merge e fixed=1."""
     crop_b64 = _crop_to_b64(frame, bbox)
     payload: dict[str, Any] = {
         "type": "novo_item",
@@ -103,7 +112,6 @@ def _on_new_item(
         "sim": round(sim, 3),
         "crop": crop_b64,
     }
-    # Persiste no SQLite (fixed=0 enquanto não renomeado)
     if state.repo is not None and embedding is not None:
         try:
             state.repo.upsert_label(name, [embedding], fixed=False)
@@ -144,7 +152,6 @@ async def _process_loop() -> None:
         if (w, h) != (state.frame_w, state.frame_h):
             state.frame_w, state.frame_h = w, h
             state.counter.configure_frame(h, w)
-            # Reset heatmap ao mudar resolução
             if state.heatmap is not None:
                 state.heatmap = Heatmap(
                     (h, w),
@@ -154,11 +161,69 @@ async def _process_loop() -> None:
 
         detections = state.detector.detect(frame)
         tracks = state.tracker.update(detections)
-
-        # Resolve nome (cache + auto ItemN)
         tracks = state.namer.resolve(tracks, frame)
 
-        # Heatmap por classe
+        # ====== v4: Behavior analysis por track ======
+        # Coleta centros pra calcular isolamento
+        centers: list[tuple[int, float, float]] = []
+        if tracks.tracker_id is not None:
+            for i in range(len(tracks)):
+                tid = int(tracks.tracker_id[i]) if tracks.tracker_id[i] is not None else None
+                if tid is None:
+                    continue
+                x1, y1, x2, y2 = tracks.xyxy[i]
+                centers.append((tid, (x1 + x2) / 2.0, (y1 + y2) / 2.0))
+
+        # Classifica cada track
+        behaviors_now: dict[int, dict] = {}
+        other_centers_per_track: dict[int, list[tuple[float, float]]] = {}
+        for tid, cx, cy in centers:
+            others = [(ox, oy) for ot, ox, oy in centers if ot != tid]
+            other_centers_per_track[tid] = others
+
+        if tracks.tracker_id is not None:
+            for i in range(len(tracks)):
+                tid = int(tracks.tracker_id[i]) if tracks.tracker_id[i] is not None else None
+                if tid is None:
+                    continue
+                bbox = tuple(tracks.xyxy[i].tolist())
+                beh = state.behavior.update(tid, state.counter.cls_name(tracks, i), bbox)
+                # reclassifica com centros
+                beh = state.behavior.classify(
+                    tid,
+                    state.counter.cls_name(tracks, i),
+                    other_centers=other_centers_per_track.get(tid, []),
+                )
+                behaviors_now[tid] = {
+                    "state": beh.state,
+                    "reason": beh.reason,
+                    "speed_px_s": round(beh.speed_px_s, 1),
+                    "static_seconds": round(beh.static_seconds, 1),
+                    "isolation_px": round(beh.isolation_px, 1),
+                    "is_lying": beh.is_lying,
+                }
+        state.latest_states = behaviors_now
+
+        # ===== Métricas agregadas =====
+        by_state = defaultdict(int)
+        for d in behaviors_now.values():
+            by_state[d["state"]] += 1
+        # total = tracks ativas agora (incluindo as que existem)
+        # mas precisamos também do "repouso" mesmo que track_id parou de update
+        total_active = len(behaviors_now)
+        analytics = {
+            "total": total_active,
+            "normal": by_state.get(State.NORMAL, 0),
+            "ativa": by_state.get(State.ATIVA, 0),
+            "repouso": by_state.get(State.REPOUSO, 0),
+            "anomalo": by_state.get(State.ANOMALA, 0),
+            "pct_ativa": round(100 * by_state.get(State.ATIVA, 0) / max(1, total_active), 1),
+            "pct_repouso": round(100 * by_state.get(State.REPOUSO, 0) / max(1, total_active), 1),
+            "pct_anomalo": round(100 * by_state.get(State.ANOMALA, 0) / max(1, total_active), 1),
+        }
+        state.latest_analytics = analytics
+
+        # ===== Heatmap + Paths (v3) =====
         if state.heatmap is not None and settings.heatmap_enabled:
             try:
                 for i in range(len(tracks)):
@@ -172,8 +237,8 @@ async def _process_loop() -> None:
             except Exception as e:
                 print(f"[heatmap] erro: {e}")
 
-        # Path tracking
         if state.paths is not None and settings.paths_enabled:
+            track_colors: dict[int, tuple] = {}
             for i in range(len(tracks)):
                 if tracks.tracker_id is None or tracks.tracker_id[i] is None:
                     continue
@@ -183,7 +248,10 @@ async def _process_loop() -> None:
                 cx = (x1 + x2) / 2.0
                 cy = (y1 + y2) / 2.0
                 state.paths.update(tid, cls_name, (cx, cy))
+                track_colors[tid] = STATE_COLOR_BGR[behaviors_now.get(tid, {}).get("state", State.NORMAL)]
             state.paths.expire()
+            # Atualiza cores das trilhas (override)
+            state.paths_state_colors = track_colors
 
         eventos = state.counter.update(tracks)
 
@@ -204,20 +272,43 @@ async def _process_loop() -> None:
                     except Exception:
                         state.ws_clients.discard(ws)
 
-        # Anota frame com bounding boxes
+        # ===== Anota frame com bboxes coloridas por estado =====
         annotated = frame.copy()
         try:
             if len(tracks) > 0 and tracks.tracker_id is not None:
-                labels = []
                 for i in range(len(tracks)):
-                    tid = tracks.tracker_id[i]
+                    tid = int(tracks.tracker_id[i])
+                    if tid is None:
+                        continue
                     cls_name = state.counter.cls_name(tracks, i)
                     conf = float(tracks.confidence[i]) if tracks.confidence is not None else 0.0
-                    labels.append(f"#{int(tid)} {cls_name} {conf:.0%}")
-                annotated = box_annotator.annotate(annotated, tracks)
-                annotated = label_annotator.annotate(annotated, tracks, labels=labels)
+                    x1, y1, x2, y2 = tracks.xyxy[i]
+                    beh_data = behaviors_now.get(tid, {})
+                    beh_state = beh_data.get("state", State.NORMAL)
+                    color = STATE_COLOR_BGR[beh_state]
+                    cv2.rectangle(annotated, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+                    label = f"#{tid} {cls_name} {beh_state} {conf:.0%}"
+                    (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                    cv2.rectangle(annotated, (int(x1), int(y1) - th - 6), (int(x1) + tw, int(y1)), color, -1)
+                    cv2.putText(
+                        annotated, label,
+                        (int(x1), int(y1) - 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1,
+                    )
         except Exception as e:
             print(f"[warn] annotator error: {e}")
+
+        # ===== Trilhas coloridas por estado =====
+        if state.paths is not None and settings.paths_enabled:
+            for d in state.paths.to_dict_list():
+                pts = np.array([(p[0], p[1]) for p in d["points"]], dtype=np.int32)
+                if len(pts) >= 2:
+                    color = STATE_COLOR_BGR.get(
+                        behaviors_now.get(d["track_id"], {}).get("state", State.NORMAL),
+                        STATE_COLOR_BGR[State.NORMAL],
+                    )
+                    cv2.polylines(annotated, [pts], False, color, 2, cv2.LINE_AA)
+                    cv2.circle(annotated, tuple(pts[-1]), 4, color, -1)
 
         # Linha de contagem
         if state.counter.line_orientation == "horizontal":
@@ -234,14 +325,6 @@ async def _process_loop() -> None:
                 annotated, f"IN/OUT line @ x={x_line}px",
                 (max(10, x_line + 4), 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1,
             )
-
-        # Paths overlay (desenha trilhas por cima)
-        if state.paths is not None and settings.paths_enabled:
-            for d in state.paths.to_dict_list():
-                pts = np.array([(p[0], p[1]) for p in d["points"]], dtype=np.int32)
-                if len(pts) >= 2:
-                    cv2.polylines(annotated, [pts], False, (88, 166, 255), 2, cv2.LINE_AA)
-                    cv2.circle(annotated, tuple(pts[-1]), 4, (88, 166, 255), -1)
 
         # HUD
         y = 24
@@ -262,8 +345,26 @@ async def _process_loop() -> None:
         state.latest_jpeg = _to_jpeg(annotated)
         state.latest_contagens = state.counter.estado()
 
-        # A cada ~5 frames, envia snapshot das tracks atuais via WS
-        # (usado pelo front pra hit-test no canvas do InlineNamer).
+        # Snapshot de timeline a cada 60s
+        import time as _time
+        if _time.time() - state.last_timeline_ts >= 60.0:
+            state.last_timeline_ts = _time.time()
+            snap = {
+                "ts": state.last_timeline_ts,
+                "total": analytics["total"],
+                "ativa": analytics["ativa"],
+                "repouso": analytics["repouso"],
+                "anomalo": analytics["anomalo"],
+                "normal": analytics["normal"],
+            }
+            state.timeline_history.append(snap)
+            if state.repo is not None:
+                try:
+                    state.repo.log_event("timeline_snapshot", snap)
+                except Exception:
+                    pass
+
+        # Tracks snapshot via WS (a cada 5 frames)
         state._frame_counter = getattr(state, "_frame_counter", 0) + 1
         if state._frame_counter % 5 == 0 and len(tracks) > 0:
             try:
@@ -275,20 +376,23 @@ async def _process_loop() -> None:
                     cls_name = state.counter.cls_name(tracks, i)
                     x1, y1, x2, y2 = tracks.xyxy[i]
                     conf = float(tracks.confidence[i]) if tracks.confidence is not None else 0.0
+                    beh_data = behaviors_now.get(tid, {})
                     tracks_payload.append({
                         "track_id": tid,
                         "cls_name": cls_name,
                         "bbox": [float(x1), float(y1), float(x2), float(y2)],
                         "conf": round(conf, 3),
+                        "state": beh_data.get("state", State.NORMAL),
+                        "speed_px_s": beh_data.get("speed_px_s", 0),
                     })
-                snap = {"type": "tracks", "tracks": tracks_payload}
+                snap_msg = {"type": "tracks", "tracks": tracks_payload}
                 for ws in list(state.ws_clients):
                     try:
-                        await ws.send_json(snap)
+                        await ws.send_json(snap_msg)
                     except Exception:
                         state.ws_clients.discard(ws)
-            except Exception as e:
-                print(f"[warn] tracks snapshot falhou: {e}")
+            except Exception:
+                pass
 
         await asyncio.sleep(0)
 
@@ -300,26 +404,19 @@ def _to_jpeg(frame: np.ndarray, quality: int = 70) -> bytes:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    print("[startup] cv-service v3 inicializando...")
+    print("[startup] cv-service v4 inicializando...")
     print(
-        f"  camera_index={settings.camera_index} "
-        f"{settings.width}x{settings.height}@{settings.fps}fps"
+        f"  camera={settings.camera_index} {settings.width}x{settings.height}@{settings.fps}fps"
     )
     print(f"  model={settings.model} conf={settings.confidence}")
-    print(f"  reid_threshold={settings.reid_threshold} device={settings.reid_device}")
-    print(f"  db={settings.db_path} heatmap={settings.heatmap_enabled} paths={settings.paths_enabled}")
 
-    # SQLite (panel)
     state.db = Database(settings.db_path)
     state.db.connect()
     state.repo = PanelRepo(state.db)
 
     state.cap = cv2.VideoCapture(settings.camera_index)
     if not state.cap.isOpened():
-        raise RuntimeError(
-            f"Não consegui abrir a câmera index={settings.camera_index}. "
-            "Confira se outra app não está usando e se o índice está certo."
-        )
+        raise RuntimeError(f"Não consegui abrir câmera index={settings.camera_index}")
     state.cap.set(cv2.CAP_PROP_FRAME_WIDTH, settings.width)
     state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.height)
     state.cap.set(cv2.CAP_PROP_FPS, settings.fps)
@@ -343,10 +440,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         line_orientation=settings.line_orientation,
         line_position=settings.line_position,
     )
-    state.storage = Storage(
-        turno_dir=settings.turno_dir, camera_id=settings.camera_id
-    )
+    state.storage = Storage(turno_dir=settings.turno_dir, camera_id=settings.camera_id)
     state.storage.iniciar_turno()
+
+    # v4
+    state.behavior = BehaviorAnalyzer()
+    state.sensor = SimulatedEnvironmentSensor()
 
     state.pending_namer_loop = asyncio.get_running_loop()
 
@@ -379,7 +478,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             pass
         if state.storage:
             state.storage.finalizar_turno()
-            print(f"[shutdown] Turno finalizado: {state.storage.json_path}")
         if state.cap:
             state.cap.release()
         if state.db:
@@ -389,7 +487,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="controle-de-movimento cv-service",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -404,11 +502,11 @@ app.add_middleware(
 async def root():
     return {
         "service": "cv-service",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "endpoints": [
             "/api/state", "/api/labels (GET/PATCH/DELETE)",
-            "/api/panel (GET/PATCH)", "/api/heatmap.png", "/api/heatmap/info",
-            "/api/paths",
+            "/api/panel (GET/PATCH)", "/api/heatmap.png", "/api/heatmap/info", "/api/paths",
+            "/api/analytics", "/api/sensors", "/api/timeline",
             "/video_feed (MJPEG)", "/api/frame.jpg",
             "/ws/events (WebSocket)",
         ],
@@ -417,6 +515,7 @@ async def root():
 
 @app.get("/api/state")
 async def api_state():
+    sensor = state.sensor.status() if state.sensor else None
     return JSONResponse({
         "camera_id": settings.camera_id,
         "camera_index": settings.camera_index,
@@ -428,6 +527,8 @@ async def api_state():
         "labels_count": len(state.labels.list_names()) if state.labels else 0,
         "heatmap_enabled": settings.heatmap_enabled,
         "paths_enabled": settings.paths_enabled,
+        "analytics": state.latest_analytics,
+        "sensor": sensor,
     })
 
 
@@ -450,18 +551,13 @@ async def api_labels_rename(old_name: str, request: Request):
         return JSONResponse({"ok": True, "renamed": False})
     ok = state.labels.rename(old_name, new_name)
     if not ok:
-        return JSONResponse(
-            {"error": f"não consegui renomear {old_name!r} → {new_name!r}"},
-            status_code=400,
-        )
-    # Sincroniza no SQLite (auto-fix: ao renomear, vira fixed=1)
+        return JSONResponse({"error": f"não consegui renomear {old_name!r}"}, status_code=400)
     if state.repo is not None:
         try:
             state.repo.rename_label(old_name, new_name)
             state.repo.set_fixed(new_name, True)
-            state.repo.log_event("label_renamed", {"from": old_name, "to": new_name})
-        except Exception as e:
-            print(f"[db] rename falhou: {e}")
+        except Exception:
+            pass
     return JSONResponse({"ok": True, "renamed": True, "from": old_name, "to": new_name, "fixed": True})
 
 
@@ -473,15 +569,14 @@ async def api_labels_delete(name: str):
     if state.repo is not None:
         try:
             state.repo.delete_label(name)
-        except Exception as e:
-            print(f"[db] delete falhou: {e}")
+        except Exception:
+            pass
     if not ok:
         return JSONResponse({"error": f"classe {name!r} não existe"}, status_code=404)
     return JSONResponse({"ok": True, "removed": name})
 
 
-# ============ PAINEL v3 ============
-
+# ===== Painel v3 =====
 @app.get("/api/panel")
 async def api_panel_get():
     if not state.repo:
@@ -497,9 +592,6 @@ async def api_panel_patch(request: Request):
     if not isinstance(body, dict):
         return JSONResponse({"error": "body precisa ser objeto"}, status_code=400)
     state.repo.set_settings_bulk(body)
-    state.repo.log_event("panel_settings_changed", {"keys": list(body.keys())})
-    # Aplica mudanças em runtime (settings runtime só de leitura, mas alguns
-    # valores como line_position podem atualizar o counter dinamicamente).
     if "line_position" in body and state.counter is not None:
         state.counter.line_position = float(body["line_position"])
     if "line_orientation" in body and state.counter is not None:
@@ -507,6 +599,7 @@ async def api_panel_patch(request: Request):
     return JSONResponse({"ok": True, "saved": list(body.keys())})
 
 
+# ===== Heatmap v3 =====
 @app.get("/api/heatmap/info")
 async def api_heatmap_info():
     if state.heatmap is None:
@@ -539,6 +632,7 @@ async def api_heatmap_clear(cls: str | None = Query(default=None)):
     return JSONResponse({"ok": True, "reset": cls or "all"})
 
 
+# ===== Paths v3 =====
 @app.get("/api/paths")
 async def api_paths():
     if state.paths is None:
@@ -546,8 +640,37 @@ async def api_paths():
     return JSONResponse({"paths": state.paths.to_dict_list()})
 
 
-# ============ STREAM ============
+# ===== v4 NOVOS =====
+@app.get("/api/analytics")
+async def api_analytics():
+    return JSONResponse({
+        "analytics": state.latest_analytics,
+        "states": state.latest_states,
+    })
 
+
+@app.get("/api/sensors")
+async def api_sensors():
+    if state.sensor is None:
+        return JSONResponse({"error": "sensor nao inicializado"}, status_code=503)
+    return JSONResponse(state.sensor.status())
+
+
+@app.get("/api/timeline")
+async def api_timeline(hours: int = Query(default=24, ge=1, le=72)):
+    """Retorna a timeline em memória. Cada entry = snapshot a cada 60s."""
+    entries = list(state.timeline_history)
+    cutoff_minutes = hours * 60
+    if len(entries) > cutoff_minutes:
+        entries = entries[-cutoff_minutes:]
+    return JSONResponse({
+        "entries": entries,
+        "granularity_seconds": 60,
+        "hours_window": hours,
+    })
+
+
+# ===== Stream =====
 @app.get("/video_feed")
 async def video_feed():
     async def gen():
@@ -587,6 +710,8 @@ async def ws_events(ws: WebSocket):
             "line_position": settings.line_position,
             "labels": state.labels.summary() if state.labels else [],
             "panel": state.repo.get_settings() if state.repo else {},
+            "analytics": state.latest_analytics,
+            "sensor": state.sensor.status() if state.sensor else None,
         })
         while True:
             try:

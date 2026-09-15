@@ -4,6 +4,7 @@
  * v2: NamingPanel para identificar e renomear classes. Endpoint PATCH/DELETE /api/labels.
  */
 import { MjpegClient } from "./stream/MjpegClient";
+import { JpegPollingClient } from "./stream/JpegPollingClient";
 import { EventsClient, type WsEvent } from "./stream/EventsClient";
 import { CounterPanel } from "./counter/CounterPanel";
 import { NamingPanel, type LabelEntry } from "./naming/NamingPanel";
@@ -137,9 +138,11 @@ function init(): void {
     }
   };
 
-  // ---- MJPEG + WS ----
-  const mjpeg = new MjpegClient(mjpegImg, CV_BASE);
-  mjpeg.start(() => setStatus(false));
+  // ---- Stream (JPEG polling — mais robusto que MJPEG em <img>) ----
+  const stream = new JpegPollingClient(mjpegImg, CV_BASE, 80);
+  stream.start(() => {
+    console.warn("[stream] falha ao buscar frame, retentando...");
+  });
 
   const events = new EventsClient(wsUrlFor(CV_BASE));
   events.start((connected) => setStatus(connected));

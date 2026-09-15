@@ -226,7 +226,34 @@ function escapeHtml(s: string): string {
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
+  document.addEventListener("DOMContentLoaded", runInit);
 } else {
-  init();
+  runInit();
 }
+
+function runInit(): void {
+  try {
+    init();
+  } catch (e) {
+    const msg = e instanceof Error ? `${e.message}\n\n${e.stack}` : String(e);
+    const banner = document.createElement("pre");
+    banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#f85149;color:#fff;padding:16px;z-index:99999;font-size:13px;white-space:pre-wrap;max-height:60vh;overflow:auto;";
+    banner.textContent = "❌ ERRO JS:\n\n" + msg;
+    document.body.appendChild(banner);
+    throw e;
+  }
+}
+
+window.addEventListener("error", (ev) => {
+  const banner = document.createElement("pre");
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#d29922;color:#000;padding:16px;z-index:99998;font-size:13px;white-space:pre-wrap;max-height:60vh;overflow:auto;";
+  banner.textContent = "⚠ ERRO NÃO TRATADO:\n\n" + (ev.error?.stack || ev.message);
+  document.body.appendChild(banner);
+});
+
+window.addEventListener("unhandledrejection", (ev) => {
+  const banner = document.createElement("pre");
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#d29922;color:#000;padding:16px;z-index:99998;font-size:13px;white-space:pre-wrap;max-height:60vh;overflow:auto;";
+  banner.textContent = "⚠ PROMISE REJEITADA:\n\n" + (ev.reason?.stack || String(ev.reason));
+  document.body.appendChild(banner);
+});

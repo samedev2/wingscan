@@ -1,4 +1,9 @@
-"""Wrapper YOLOv8 (ultralytics) -> supervision.Detections."""
+"""
+Detector YOLOv8 genérico (todas as 80 classes COCO).
+
+Na v2 o classificador semântico é o classificador de embeddings (namer),
+não mais o nome da classe COCO. Aqui só pegamos TUDO que aparece.
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -7,27 +12,19 @@ from ultralytics import YOLO
 
 
 class Detector:
-    def __init__(self, model_name: str, target_classes: tuple[str, ...], conf: float):
+    def __init__(self, model_name: str, conf: float):
         self.model = YOLO(model_name)
         self.conf = conf
-        names = self.model.names  # dict[int, str]
-        self.class_ids: list[int] = [
-            i for i, name in names.items() if name in target_classes
-        ]
-        if not self.class_ids:
-            print(
-                f"[WARN] Nenhuma classe-alvo encontrada no modelo {model_name}."
-                f" Disponíveis: {sorted(set(names.values()))}"
-            )
-        else:
-            resolved = [names[i] for i in self.class_ids]
-            print(f"[detector] {model_name} ativo para classes={resolved} (ids={self.class_ids})")
+        names = self.model.names
+        print(
+            f"[detector] {model_name} carregado — "
+            f"{len(names)} classes disponíveis (genérico, todas ativas)"
+        )
 
     def detect(self, frame: np.ndarray) -> sv.Detections:
         results = self.model.predict(
             frame,
             conf=self.conf,
-            classes=self.class_ids,
             verbose=False,
         )
         if not results:

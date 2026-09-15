@@ -5,12 +5,11 @@
   --accent: #58a6ff;
   --good: #3fb950;
   --bad: #f85149;
+  --warn: #d29922;
   --border: #30363d;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html, body {
   margin: 0;
@@ -59,7 +58,7 @@ html, body {
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 1fr 360px;
   gap: 16px;
   padding: 16px;
   height: calc(100% - 49px);
@@ -95,11 +94,7 @@ html, body {
   inset: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none; /* overlay não bloqueia drag */
-}
-
-.video-wrap canvas.active {
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .hud {
@@ -144,6 +139,140 @@ html, body {
   padding-bottom: 6px;
 }
 
+.side h2:not(:first-of-type) { margin-top: 6px; }
+
+.muted { color: var(--muted); }
+.small { font-size: 11px; }
+
+code {
+  background: #21262d;
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+/* ----- Labels / Naming panel ----- */
+
+.labels-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.label-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 2px 8px;
+  padding: 8px 10px;
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: background 0.6s, border-color 0.6s;
+}
+
+.label-row.flash {
+  background: rgba(88, 166, 255, 0.18);
+  border-color: var(--accent);
+}
+
+.label-row.named { border-left: 3px solid var(--good); }
+.label-row.auto  { border-left: 3px solid var(--warn); }
+
+.label-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.label-name .badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(210, 153, 34, 0.2);
+  color: var(--warn);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: ui-sans-serif, sans-serif;
+  font-weight: 600;
+}
+
+.label-name .badge.ok {
+  background: rgba(63, 185, 80, 0.18);
+  color: var(--good);
+}
+
+.label-meta {
+  grid-column: 1;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.label-actions {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.btn-rename, .btn-delete {
+  background: #21262d;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.btn-rename:hover { background: #30363d; }
+.btn-delete.danger { color: var(--bad); padding: 2px 8px; }
+.btn-delete.danger:hover { background: rgba(248, 81, 73, 0.15); }
+
+/* ----- New item banner ----- */
+
+.new-item-banner {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: rgba(13, 17, 23, 0.92);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 14px;
+  pointer-events: none;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+  max-width: 360px;
+}
+
+.new-item-banner.show { display: flex; }
+
+.new-item-banner img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.new-item-info { display: flex; flex-direction: column; gap: 2px; }
+.new-item-name {
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ----- Counter ----- */
+
 #counter-table {
   width: 100%;
   border-collapse: collapse;
@@ -165,8 +294,6 @@ html, body {
   letter-spacing: 0.4px;
 }
 
-.muted { color: var(--muted); }
-
 .events {
   list-style: none;
   margin: 0;
@@ -174,7 +301,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 240px;
+  max-height: 200px;
   overflow-y: auto;
   font-family: ui-monospace, monospace;
   font-size: 12px;
@@ -198,10 +325,7 @@ html, body {
   font-size: 12px;
 }
 
-.meta dt {
-  color: var(--muted);
-}
-
+.meta dt { color: var(--muted); }
 .meta dd {
   margin: 0;
   font-family: ui-monospace, monospace;

@@ -20,6 +20,7 @@
         <div class="video-wrap" id="video-wrap">
           <img id="mjpeg" alt="stream MJPEG" />
           <canvas id="overlay" width="1280" height="720"></canvas>
+          <div id="new-item-banner" class="new-item-banner"></div>
         </div>
 
         <div class="hud" id="hud">
@@ -34,6 +35,14 @@
       </section>
 
       <aside class="side">
+        <h2>Classes identificadas</h2>
+        <p class="muted small">
+          Itens novos são auto-nomeados como <code>ItemN</code>. Clique em
+          <em>renomear</em> para dar um nome real. Próximas detecções com aparência
+          similar serão reconhecidas automaticamente.
+        </p>
+        <div id="labels-list" class="labels-list"></div>
+
         <h2>Contagem</h2>
         <table id="counter-table">
           <thead>

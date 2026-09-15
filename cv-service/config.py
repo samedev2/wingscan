@@ -25,11 +25,9 @@ def _env_int(name: str, default: int) -> int:
         raise ValueError(f"{name} precisa ser int, recebi {raw!r}") from exc
 
 
-def _env_tuple(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+def _env_str(name: str, default: str) -> str:
     raw = os.getenv(name)
-    if raw is None or raw == "":
-        return default
-    return tuple(part.strip() for part in raw.split(",") if part.strip())
+    return raw if raw is not None and raw != "" else default
 
 
 @dataclass(frozen=True)
@@ -41,20 +39,24 @@ class Settings:
     fps: int = _env_int("CV_FPS", 30)
 
     # Modelo
-    model: str = os.getenv("CV_MODEL", "yolov8n.pt")
-    confidence: float = _env_float("CV_CONFIDENCE", 0.4)
-    target_classes: tuple[str, ...] = _env_tuple("CV_CLASSES", ("bird", "person"))
+    model: str = _env_str("CV_MODEL", "yolov8n.pt")
+    confidence: float = _env_float("CV_CONFIDENCE", 0.35)
 
     # Contagem (linha virtual)
-    line_orientation: str = os.getenv("CV_LINE_ORIENTATION", "horizontal")  # horizontal | vertical
-    line_position: float = _env_float("CV_LINE_POSITION", 0.5)  # 0..1 do frame
+    line_orientation: str = _env_str("CV_LINE_ORIENTATION", "horizontal")
+    line_position: float = _env_float("CV_LINE_POSITION", 0.5)
 
     # Storage
-    camera_id: str = os.getenv("CV_CAMERA_ID", "webcam-0")
-    turno_dir: str = os.getenv("CV_TURNO_DIR", "data/turnos")
+    camera_id: str = _env_str("CV_CAMERA_ID", "webcam-0")
+    turno_dir: str = _env_str("CV_TURNO_DIR", "data/turnos")
+
+    # ReID
+    reid_threshold: float = _env_float("CV_REID_THRESHOLD", 0.65)
+    reid_device: str = _env_str("CV_REID_DEVICE", "auto")  # auto|cuda|cpu
+    labels_path: str = _env_str("CV_LABELS_PATH", "data/labels.json")
 
     # Server
-    host: str = os.getenv("CV_HOST", "127.0.0.1")
+    host: str = _env_str("CV_HOST", "127.0.0.1")
     port: int = _env_int("CV_PORT", 8000)
 
 

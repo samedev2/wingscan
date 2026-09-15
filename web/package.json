@@ -1,0 +1,22 @@
+{
+  "name": "controle-de-movimento-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Front-end de controle de movimento: stream MJPEG + WS eventos + PTZ virtual via spatial-controls.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 5173"
+  },
+  "dependencies": {
+    "three": "^0.169.0",
+    "synthetic-event": "^2.0.0",
+    "spatial-controls": "file:../spatial-controls"
+  },
+  "devDependencies": {
+    "@types/three": "^0.169.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0"
+  }
+}

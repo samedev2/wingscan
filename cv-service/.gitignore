@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# Dados de turno
+data/turnos/
+*.csv
+*.json.gz
+
+# YOLO downloads
+*.pt
+!yolov8*.pt
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store

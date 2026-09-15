@@ -1,0 +1,246 @@
+import { EventTarget } from "synthetic-event";
+import { Vector3 } from "three";
+import { SettingsEventMap } from "./SettingsEventMap.js";
+
+/**
+ * Translation settings.
+ *
+ * @group Settings
+ */
+
+export class TranslationSettings extends EventTarget<SettingsEventMap> {
+
+	// #region Backing Data
+
+	/**
+	 * @see {@link enabled}
+	 */
+
+	private _enabled: boolean;
+
+	/**
+	 * @see {@link sensitivity}
+	 */
+
+	private _sensitivity: number;
+
+	/**
+	 * @see {@link boostMultiplier}
+	 */
+
+	private _boostMultiplier: number;
+
+	/**
+	 * @see {@link damping}
+	 */
+
+	private _damping: number;
+
+	/**
+	 * @see {@link axisModifier}
+	 */
+
+	private readonly _axisWeights: Vector3;
+
+	// #endregion
+
+	/**
+	 * Constructs new translation settings.
+	 */
+
+	constructor() {
+
+		super();
+
+		this._enabled = true;
+		this._sensitivity = 1.0;
+		this._boostMultiplier = 2.0;
+		this._damping = 0.0;
+		this._axisWeights = new Vector3(1, 1, 1);
+
+	}
+
+	/**
+	 * Indicates whether positional translation is enabled.
+	 *
+	 * @defaultValue true
+	 */
+
+	get enabled(): boolean {
+
+		return this._enabled;
+
+	}
+
+	set enabled(value: boolean) {
+
+		this._enabled = value;
+		this.dispatchEvent({ type: "change" });
+
+	}
+
+	/**
+	 * The translation sensitivity.
+	 *
+	 * @defaultValue 1.0
+	 */
+
+	get sensitivity(): number {
+
+		return this._sensitivity;
+
+	}
+
+	set sensitivity(value: number) {
+
+		this._sensitivity = value;
+		this.dispatchEvent({ type: "change" });
+
+	}
+
+	/**
+	 * The translation boost multiplier.
+	 *
+	 * @defaultValue 2.0
+	 */
+
+	get boostMultiplier(): number {
+
+		return this._boostMultiplier;
+
+	}
+
+	set boostMultiplier(value: number) {
+
+		this._boostMultiplier = Math.max(value, 1.0);
+		this.dispatchEvent({ type: "change" });
+
+	}
+
+	/**
+	 * The damping factor. Range is [0.0, +Infinity]. Set to 0 to disable.
+	 *
+	 * @defaultValue 0.0
+	 */
+
+	get damping(): number {
+
+		return this._damping;
+
+	}
+
+	set damping(value: number) {
+
+		this._damping = value;
+		this.dispatchEvent({ type: "change" });
+
+	}
+
+	/**
+	 * Weights that influence movement along each axis.
+	 *
+	 * @see {@link setAxisWeights} for changing the weights.
+	 */
+
+	get axisWeights(): Readonly<Vector3> {
+
+		return this._axisWeights;
+
+	}
+
+	private set axisWeights(value: Vector3) {
+
+		this._axisWeights.copy(value);
+		this.dispatchEvent({ type: "change" });
+
+	}
+
+	/**
+	 * Sets the axis weights individually.
+	 *
+	 * @param x - The weight for the X-axis.
+	 * @param y - The weight for the Y-axis.
+	 * @param z - The weight for the Z-axis.
+	 */
+
+	setAxisWeights(x: number, y: number, z: number): void {
+
+		this._axisWeights.set(x, y, z);
+		this.dispatchEvent({ type: "change" });
+
+	}
+
+	/**
+	 * Copies the given translation settings.
+	 *
+	 * @param settings - Translation settings.
+	 * @return This instance.
+	 */
+
+	copy(settings: TranslationSettings): TranslationSettings {
+
+		this.enabled = settings.enabled;
+		this.sensitivity = settings.sensitivity;
+		this.boostMultiplier = settings.boostMultiplier;
+		this.damping = settings.damping;
+
+		return this;
+
+	}
+
+	/**
+	 * Clones this translation settings instance.
+	 *
+	 * @return The cloned translation settings.
+	 */
+
+	clone(): TranslationSettings {
+
+		const clone = new TranslationSettings();
+		return clone.copy(this);
+
+	}
+
+	/**
+	 * Copies the given JSON data.
+	 *
+	 * @param json - The JSON data.
+	 * @return This instance.
+	 */
+
+	fromJSON(json: string | TranslationSettings): TranslationSettings {
+
+		if(typeof json === "string") {
+
+			json = JSON.parse(json) as TranslationSettings;
+
+		}
+
+		this.enabled = json.enabled;
+		this.sensitivity = json.sensitivity;
+		this.boostMultiplier = json.boostMultiplier;
+		this.damping = json.damping;
+
+		if(json.axisWeights !== undefined) {
+
+			this.axisWeights.copy(json.axisWeights);
+
+		}
+
+		return this;
+
+	}
+
+	toJSON(): Record<string, unknown> {
+
+		return {
+			enabled: this.enabled,
+			sensitivity: this.sensitivity,
+			boostMultiplier: this.boostMultiplier,
+			axisWeights: this.axisWeights,
+			damping: this.damping
+		};
+
+	}
+
+}

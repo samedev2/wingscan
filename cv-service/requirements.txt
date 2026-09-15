@@ -1,0 +1,11 @@
+# cv-service: webcam + YOLOv8 + ByteTrack + FastAPI
+# Torch (CPU) vem como dep transitiva do ultralytics.
+# Para GPU, veja requirements-gpu.txt
+
+ultralytics>=8.3.0
+supervision>=0.25.0
+opencv-python>=4.10.0
+numpy>=1.26.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.12

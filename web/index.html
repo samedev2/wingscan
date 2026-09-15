@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Controle de Movimento</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Controle de Movimento</h1>
+      <div class="status" id="status">
+        <span class="dot" id="conn-dot"></span>
+        <span id="conn-text">conectando…</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="stage" id="stage">
+        <div class="video-wrap" id="video-wrap">
+          <img id="mjpeg" alt="stream MJPEG" />
+          <canvas id="overlay" width="1280" height="720"></canvas>
+        </div>
+
+        <div class="hud" id="hud">
+          <span class="kbd">A/D</span> pan &nbsp;
+          <span class="kbd">W/S</span> zoom &nbsp;
+          <span class="kbd">↑/↓</span> tilt &nbsp;
+          <span class="kbd">R</span> boost &nbsp;
+          <span class="kbd">0</span> reset &nbsp;
+          <span class="kbd">drag</span> pan &nbsp;
+          <span class="kbd">scroll</span> zoom
+        </div>
+      </section>
+
+      <aside class="side">
+        <h2>Contagem</h2>
+        <table id="counter-table">
+          <thead>
+            <tr>
+              <th>classe</th>
+              <th>IN</th>
+              <th>OUT</th>
+              <th>ativos</th>
+            </tr>
+          </thead>
+          <tbody id="counter-body">
+            <tr><td colspan="4" class="muted">aguardando dados…</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Eventos</h2>
+        <ul id="events" class="events"></ul>
+
+        <h2>Conexão</h2>
+        <dl class="meta">
+          <dt>cv-service</dt><dd id="cv-url">http://127.0.0.1:8000</dd>
+          <dt>câmera</dt><dd id="cv-camera">—</dd>
+          <dt>modelo</dt><dd id="cv-model">—</dd>
+          <dt>resolução</dt><dd id="cv-resolution">—</dd>
+          <dt>linha</dt><dd id="cv-line">—</dd>
+        </dl>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

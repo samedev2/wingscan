@@ -1,0 +1,12 @@
+# cv-service: deps adicionais para GPU NVIDIA (CUDA 12.x)
+# 1) Instalar deps normais:  pip install -r requirements.txt
+# 2) Sobrescrever torch CPU por CUDA: pip install -r requirements-gpu.txt
+#
+# A versão CUDA deve casar com o driver instalado. Em Windows 11 com RTX 3050,
+# o driver mais recente já suporta CUDA 12.x.
+#
+# Pra descobrir o que está rodando:  nvidia-smi  (deve mostrar CUDA Version: 12.x)
+
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch
+torchvision

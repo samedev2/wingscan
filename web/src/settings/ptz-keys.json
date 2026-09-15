@@ -1,0 +1,13 @@
+{
+  "comment": "Layout de teclado atual (definido em src/ptz/VirtualPTZ.ts).",
+  "pan_left":  "KeyA / ArrowLeft",
+  "pan_right": "KeyD / ArrowRight",
+  "tilt_up":   "ArrowUp",
+  "tilt_down": "ArrowDown / KeyZ",
+  "zoom_in":   "KeyW (move-forward) | NumpadAdd",
+  "zoom_out":  "KeyS (move-backward) | NumpadSubtract",
+  "boost":     "KeyR",
+  "reset":     "Digit0",
+  "drag":      "Pointer drag no vídeo",
+  "scroll":    "Wheel sobre o vídeo"
+}

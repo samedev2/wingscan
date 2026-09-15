@@ -1,0 +1,393 @@
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  export * from "./core/index.js";
+   |                               ^
+2  |  export * from "./events/index.js";
+3  |  export * from "./input/index.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/index.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  export * from "./Action.js";
+2  |  export * from "./BoundAction.js";
+   |  ^
+3  |  export * from "./Constraint.js";
+4  |  export * from "./Collider.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/index.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  export * from "./Input.js";
+2  |  export * from "./KeyCode.js";
+   |   ^
+3  |  export * from "./Modifier.js";
+4  |  export * from "./PointerBehavior.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/input/index.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  export * from "./axes.js";
+2  |  export * from "./ScalarDamper.js";
+   |    ^
+3  |  
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/math/index.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  export * from "./Bindings.js";
+   |                               ^
+2  |  export * from "./DollySettings.js";
+3  |  export * from "./GeneralSettings.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/index.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  export * from "./CollisionManager.js";
+   |                               ^
+2  |  export * from "./CollisionManagerEventMap.js";
+3  |  export * from "./InputManager.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/index.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  export * from "./ActionEvent.js";
+   |                               ^
+2  |  export * from "./MovementEvent.js";
+3  |  
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/events/index.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * An enumeration of control actions.
+   |                           ^
+3  |   *
+4  |   * @group Core
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/Action.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Quaternion, Vector3 } from "three";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/Spatial.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * Constrains a given value.
+   |                           ^
+3  |   *
+4  |   * @group Core
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/Constraint.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * Describes objects that can dispose internal resources.
+   |                           ^
+3  |   *
+4  |   * @group Core
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/Disposable.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * An enumeration of control modes.
+   |                           ^
+3  |   *
+4  |   * @group Core
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/ControlMode.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * Describes objects that can be updated.
+   |                           ^
+3  |   *
+4  |   * @group Core
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/Updatable.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Vector3 } from "three";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/Collider.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * An enumeration of movement directions.
+   |                           ^
+3  |   *
+4  |   * @group Core
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/Direction.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * An enumeration of modifier keys.
+   |                           ^
+3  |   *
+4  |   * @group Input
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/input/Modifier.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * An enumeration of input keys.
+   |                           ^
+3  |   *
+4  |   * @see https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/input/KeyCode.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event } from "synthetic-event";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/events/ActionEvent.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Action } from "./Action.js";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/BoundAction.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event, EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { Vector3 } from "three";
+3  |  import { Constraint } from "../core/Constraint.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/CollisionManager.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event } from "synthetic-event";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/SettingsEventMap.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Modifier } from "./Modifier.js";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/input/Input.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * A scalar damper that retains velocity.
+   |                           ^
+3  |   *
+4  |   * Based on Game Programming Gems 4 Chapter 1.10.
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/math/ScalarDamper.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event } from "synthetic-event";
+   |                               ^
+2  |  import { ActionEvent } from "../events/ActionEvent.js";
+3  |  import { MovementEvent } from "../events/MovementEvent.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/InputManagerEventMap.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event } from "synthetic-event";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/events/MovementEvent.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * An enumeration of wheel rotations.
+   |                           ^
+3  |   *
+4  |   * @group Input
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/input/WheelRotation.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { Vector3 } from "three";
+3  |  import { SettingsEventMap } from "./SettingsEventMap.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/TranslationSettings.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { SettingsEventMap } from "./SettingsEventMap.js";
+3  |  
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/DollySettings.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event } from "synthetic-event";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/CollisionManagerEventMap.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+2  |   * The X-axis.
+3  |   *
+4  |   * @group Core
+   |         ^
+5  |   * @ignore
+6  |   */
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/math/axes.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event } from "synthetic-event";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/TranslationManagerEventMap.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * An enumeration of pointer buttons.
+   |                           ^
+3  |   *
+4  |   * @group Input
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/input/PointerButton.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { PointerBehavior } from "../input/PointerBehavior.js";
+3  |  import { PointerButton } from "../input/PointerButton.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/PointerSettings.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { Action } from "../core/Action.js";
+3  |  import { Input } from "../input/Input.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/InputSettings.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event, EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { Quaternion, Vector3 } from "three";
+3  |  import { CollisionManager } from "../managers/CollisionManager.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/SpatialControls.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Quaternion, Vector3 } from "three";
+   |                               ^
+2  |  import { Spatial } from "./Spatial.js";
+3  |  
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/TransformationData.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Vector3 } from "three";
+   |                               ^
+2  |  import { Direction } from "../core/Direction.js";
+3  |  
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/MovementState.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { ControlMode } from "../core/ControlMode.js";
+3  |  import { SettingsEventMap } from "./SettingsEventMap.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/GeneralSettings.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * An enumeration of pointer behaviors.
+   |                           ^
+3  |   *
+4  |   * @group Input
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/input/PointerBehavior.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event, EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { Quaternion, Vector3 } from "three";
+3  |  import { Action } from "../core/Action.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/TranslationManager.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { DollySettings } from "./DollySettings.js";
+3  |  import { GeneralSettings } from "./GeneralSettings.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/Settings.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { Vector3 } from "three";
+3  |  import * as axes from "../math/axes.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/RotationSettings.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event } from "synthetic-event";
+   |                               ^
+2  |  
+3  |  /**
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/RotationManagerEventMap.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Action } from "../core/Action.js";
+   |                               ^
+2  |  import { BoundAction } from "../core/BoundAction.js";
+3  |  import { Input } from "../input/Input.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/settings/Bindings.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event, EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { Action } from "../core/Action.js";
+3  |  import { Disposable } from "../core/Disposable.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/InputManager.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  import { Event, EventTarget } from "synthetic-event";
+   |                               ^
+2  |  import { Matrix4, Quaternion, Spherical, Vector3 } from "three";
+3  |  import { Action } from "../core/Action.js";
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/managers/RotationManager.ts[39m
+[2m11:57:16[22m [33m[1m[vite][22m[39m [33mwarning: [33mUnrecognized target environment "es2025"[33m
+1  |  /**
+2  |   * Converts milliseconds to seconds.
+   |                           ^
+3  |   *
+4  |   * @group Core
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mC:/Users/Administrador/Downloads/PROJETOS CONSELHO TECH/CONTROLE DE MOVIMENTO/spatial-controls/src/core/time.ts[39m

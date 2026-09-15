@@ -1,0 +1,84 @@
+{
+	"name": "spatial-controls",
+	"version": "6.2.1",
+	"description": "Configurable 3D movement controls.",
+	"homepage": "https://github.com/vanruesc/spatial-controls",
+	"license": "Zlib",
+	"type": "module",
+	"sideEffects": false,
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/types/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/types/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"keywords": [
+		"movement",
+		"translation",
+		"rotation",
+		"object",
+		"camera",
+		"orbit",
+		"controls",
+		"keybindings",
+		"3d"
+	],
+	"author": {
+		"name": "Raoul van Rüschen",
+		"email": "vanruesc@outlook.de"
+	},
+	"repository": {
+		"url": "git+https://github.com/vanruesc/spatial-controls.git"
+	},
+	"bugs": {
+		"url": "https://github.com/vanruesc/spatial-controls/issues"
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"node": ">= 21"
+	},
+	"scripts": {
+		"build": "node esbuild",
+		"clean": "del-cli dist public",
+		"copy": "cpy \"demo/static/**/*\" public/demo",
+		"dts": "tsc -p tsconfig.d.json",
+		"lint": "eslint --fix src demo/src test",
+		"start": "serve public -Lu",
+		"pretest": "run-s clean dts lint build copy",
+		"test": "node --import tsx --test",
+		"posttest": "typedoc --plugin typedoc-plugin-mdn-links",
+		"prewatch": "run-s clean dts copy",
+		"watch": "run-p watch:* start",
+		"watch:js": "node esbuild -w",
+		"prepublishOnly": "run-s test"
+	},
+	"peerDependencies": {
+		"three": "0.x.x"
+	},
+	"dependencies": {
+		"synthetic-event": "2.x.x"
+	},
+	"devDependencies": {
+		"@tweakpane/core": "2.x.x",
+		"@types/node": "26.x.x",
+		"@types/three": "0.x.x",
+		"cpy-cli": "7.x.x",
+		"del-cli": "7.x.x",
+		"esbuild": "0.28.x",
+		"eslint": "10.x.x",
+		"eslint-config-aether": "3.x.x",
+		"npm-run-all": "4.x.x",
+		"serve": "14.x.x",
+		"three": "0.x.x",
+		"tsx": "4.x.x",
+		"tweakpane": "4.x.x",
+		"typedoc": "0.x.x",
+		"typedoc-plugin-mdn-links": "5.x.x",
+		"typescript": "6.0.x"
+	}
+}

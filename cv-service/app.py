@@ -27,6 +27,7 @@ from typing import Any, AsyncIterator
 import cv2
 import numpy as np
 import supervision as sv
+import time as _time_top
 from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -43,6 +44,7 @@ from panel.db import Database
 from panel.repo import PanelRepo
 from reid import ReIDEncoder
 from sensors.environment import SimulatedEnvironmentSensor
+from size_classifier import SizeClassifier
 from storage import Storage
 from tracker import Tracker
 from tracking.heatmap import Heatmap
@@ -65,6 +67,7 @@ class AppState:
     heatmap: Heatmap | None = None
     paths: PathTracker | None = None
     palette_heatmap: PaletteHeatmap | None = None
+    size_classifier: SizeClassifier | None = None
     behavior: BehaviorAnalyzer | None = None
     sensor: SimulatedEnvironmentSensor | None = None
     running: bool = False
@@ -85,12 +88,37 @@ class AppState:
     # timeline in-memory das últimas N leituras (1 por minuto)
     timeline_history: deque = deque(maxlen=24 * 60)  # 24h em minutos
     last_timeline_ts: float = 0.0
+    # aves individualmente identificadas (galinha/pintainho): {track_id -> info}
+    identified_birds: dict = {}
 
 
 state = AppState()
 
 # lock que serializa leituras do `state.cap` em relação a trocas de fonte
 cap_lock = asyncio.Lock()
+
+
+def _resolve_cls_name(tracks, i: int) -> str:
+    """Resolve o nome da classe para o track i.
+
+    Com pinteiro.pt (branch v5-pinteiro), o detector ja retorna as 3 classes
+    nativas: 'pinto', 'galinha', 'galo'. So repassamos o class_name.
+    """
+    return state.counter.cls_name(tracks, i) if state.counter else "unknown"
+
+
+def _tipo_da_ave(cls_name: str) -> str | None:
+    """Deriva o tipo da ave (pinto/galinha/galo) a partir do nome do namer.
+    Aceita: 'pinto' (puro), 'pinto-1' (com indice), 'pinto_x' (variantes).
+    Retorna None se nao for uma classe reconhecida.
+    """
+    if not cls_name:
+        return None
+    c = cls_name.lower().strip()
+    for tipo in ("pinto", "galinha", "galo", "pintainho"):
+        if c == tipo or c.startswith(tipo + "-") or c.startswith(tipo + "_"):
+            return tipo
+    return None
 
 
 def _crop_to_b64(frame: np.ndarray, bbox: tuple, size: int = 160) -> str:
@@ -154,8 +182,14 @@ async def _process_loop() -> None:
             await asyncio.sleep(0.1)
             continue
 
-        async with cap_lock:
+        try:
             ok, frame = await asyncio.to_thread(state.cap.read)
+        except Exception as e:
+            import traceback
+            print(f"[loop] ERRO cap.read: {type(e).__name__}: {e}", flush=True)
+            traceback.print_exc()
+            await asyncio.sleep(0.1)
+            continue
             if not ok or frame is None:
                 # vídeo chegou ao fim — se loop ligado, volta ao início
                 if settings.video_path and settings.video_loop:
@@ -212,7 +246,22 @@ async def _process_loop() -> None:
 
         detections = state.detector.detect(frame)
         tracks = state.tracker.update(detections)
-        tracks = state.namer.resolve(tracks, frame)
+        try:
+            tracks = state.namer.resolve(tracks, frame)
+        except Exception as e:
+            import traceback
+            print(f"[process_loop] ERRO namer.resolve: {type(e).__name__}: {e}")
+            traceback.print_exc()
+        # === garante que class_name eh lista Python (evita truncamento de np.ndarray) ===
+        if tracks.data is not None and len(tracks) > 0:
+            if "class_name" in tracks.data:
+                cn = tracks.data["class_name"]
+                if not isinstance(cn, list):
+                    cn = list(cn)
+                    tracks.data["class_name"] = cn
+        # NOTA: pinteiro.pt ja distingue pinto/galinha/galo nativamente.
+        # O size_classifier (bbox-based) foi desativado para esta branch.
+        # O _resolve_cls_name agora apenas repassa o class_name original.
 
         # ====== v4: Behavior analysis por track ======
         # Coleta centros pra calcular isolamento
@@ -238,11 +287,12 @@ async def _process_loop() -> None:
                 if tid is None:
                     continue
                 bbox = tuple(tracks.xyxy[i].tolist())
-                beh = state.behavior.update(tid, state.counter.cls_name(tracks, i), bbox)
+                cls = _resolve_cls_name(tracks, i)
+                beh = state.behavior.update(tid, cls, bbox)
                 # reclassifica com centros
                 beh = state.behavior.classify(
                     tid,
-                    state.counter.cls_name(tracks, i),
+                    _resolve_cls_name(tracks, i),
                     other_centers=other_centers_per_track.get(tid, []),
                 )
                 behaviors_now[tid] = {
@@ -256,6 +306,31 @@ async def _process_loop() -> None:
         state.latest_states = behaviors_now
 
         # ===== Métricas agregadas =====
+        # Atualiza identified_birds com last_seen/current_state dos tracks ativos
+        now_ts = _time_top.time()
+        for tid, beh in behaviors_now.items():
+            if tid in state.identified_birds:
+                rec = state.identified_birds[tid]
+                rec["last_seen"] = now_ts
+                rec["current_state"] = beh.state
+                rec["frames_seen"] = rec.get("frames_seen", 1) + 1
+        # cleanup: remove identificado se não visto por mais de 30s
+        stale = [
+            tid for tid, rec in state.identified_birds.items()
+            if (now_ts - rec.get("last_seen", now_ts)) > 30.0
+        ]
+        for tid in stale:
+            rec = state.identified_birds.pop(tid, None)
+            if rec is not None and state.repo is not None:
+                try:
+                    state.repo.log_event("bird_lost", {
+                        "track_id": tid,
+                        "type": rec.get("type"),
+                        "frames_seen": rec.get("frames_seen", 1),
+                        "duration_s": round(now_ts - rec.get("first_seen", now_ts), 1),
+                    })
+                except Exception:
+                    pass
         by_state = defaultdict(int)
         for d in behaviors_now.values():
             by_state[d["state"]] += 1
@@ -283,7 +358,7 @@ async def _process_loop() -> None:
                 for i in range(len(tracks)):
                     if tracks.tracker_id is None or tracks.tracker_id[i] is None:
                         continue
-                    cls_name = state.counter.cls_name(tracks, i)
+                    cls_name = _resolve_cls_name(tracks, i)
                     x1, y1, x2, y2 = tracks.xyxy[i]
                     cx = int((x1 + x2) / 2)
                     cy = int((y1 + y2) / 2)
@@ -297,7 +372,7 @@ async def _process_loop() -> None:
                 if tracks.tracker_id is None or tracks.tracker_id[i] is None:
                     continue
                 tid = int(tracks.tracker_id[i])
-                cls_name = state.counter.cls_name(tracks, i)
+                cls_name = _resolve_cls_name(tracks, i)
                 x1, y1, x2, y2 = tracks.xyxy[i]
                 cx = (x1 + x2) / 2.0
                 cy = (y1 + y2) / 2.0
@@ -322,12 +397,63 @@ async def _process_loop() -> None:
                 if tid_v is None:
                     continue
                 tid = int(tid_v)
-                cls_name = state.counter.cls_name(tracks, i)
+                cls_name = _resolve_cls_name(tracks, i)
                 if state.counter.register(tid, cls_name):
                     conf = float(tracks.confidence[i]) if tracks.confidence is not None else 0.0
                     novos_agora.append((tid, cls_name, conf))
         if novos_agora:
+            now_ts = _time_top.time()
             for tid, cls_name, conf in novos_agora:
+                # === identifica e registra cada ave individualmente ===
+                # deriva o tipo (pinto/galinha/galo) a partir do nome do namer
+                # (ex: "pinto-1" -> "pinto", "galinha-3" -> "galinha", "galo-1" -> "galo")
+                tipo = _tipo_da_ave(cls_name)
+                if tipo:
+                    state.identified_birds[tid] = {
+                        "track_id": tid,
+                        "name": cls_name,
+                        "type": tipo,
+                        "conf": round(conf, 3),
+                        "first_seen": now_ts,
+                        "last_seen": now_ts,
+                        "frames_seen": 1,
+                        "current_state": behaviors_now.get(tid, {}).get("state", State.NORMAL),
+                    }
+                    if state.repo is not None:
+                        try:
+                            state.repo.log_event("bird_identified", {
+                                "track_id": tid,
+                                "type": tipo,
+                                "conf": round(conf, 3),
+                                "ts": now_ts,
+                            })
+                        except Exception:
+                            pass
+                    payload = {
+                        "type": "identified",
+                        "track_id": tid,
+                        "kind": tipo,
+                        "conf": round(conf, 3),
+                        "ts": now_ts,
+                    }
+                    for ws in list(state.ws_clients):
+                        try:
+                            await ws.send_json(payload)
+                        except Exception:
+                            state.ws_clients.discard(ws)
+                # evento genérico track_entered
+                payload = {
+                    "type": "track_entered",
+                    "track_id": tid,
+                    "classe": cls_name,
+                    "conf": round(conf, 3),
+                }
+                for ws in list(state.ws_clients):
+                    try:
+                        await ws.send_json(payload)
+                    except Exception:
+                        state.ws_clients.discard(ws)
+                # evento genérico track_entered
                 payload = {
                     "type": "track_entered",
                     "track_id": tid,
@@ -376,7 +502,7 @@ async def _process_loop() -> None:
                     tid = int(tracks.tracker_id[i])
                     if tid is None:
                         continue
-                    cls_name = state.counter.cls_name(tracks, i)
+                    cls_name = _resolve_cls_name(tracks, i)
                     conf = float(tracks.confidence[i]) if tracks.confidence is not None else 0.0
                     x1, y1, x2, y2 = tracks.xyxy[i]
                     beh_data = behaviors_now.get(tid, {})
@@ -421,6 +547,20 @@ async def _process_loop() -> None:
                 (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (50, 255, 50), 2,
             )
             y += 22
+        # resumo agregado: pintainhos vs galinhas
+        if state.size_classifier is not None:
+            chick = state.size_classifier.chick_label
+            hen = state.size_classifier.hen_label
+            chick_uniq = state.counter.estado().get(chick, {}).get("unique", 0) if state.counter else 0
+            chick_now = state.counter.estado().get(chick, {}).get("current", 0) if state.counter else 0
+            hen_uniq = state.counter.estado().get(hen, {}).get("unique", 0) if state.counter else 0
+            hen_now = state.counter.estado().get(hen, {}).get("current", 0) if state.counter else 0
+            cv2.putText(
+                annotated,
+                f"RESUMO: {chick}={chick_uniq} uniq ({chick_now} agora) | {hen}={hen_uniq} uniq ({hen_now} agora)",
+                (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 220, 100), 2,
+            )
+            y += 20
         # linha do palete (cold wave) — DESATIVADA
         # if state.palette_heatmap is not None:
         #     stats = state.palette_heatmap.stats()
@@ -432,11 +572,11 @@ async def _process_loop() -> None:
         #     y += 20
 
         state.latest_jpeg = _to_jpeg(annotated)
-        state.latest_contagens = state.counter.estado()
+        _est = state.counter.estado()
+        state.latest_contagens = _est
 
         # Snapshot de timeline a cada 60s
-        import time as _time
-        if _time.time() - state.last_timeline_ts >= 60.0:
+        if _time_top.time() - state.last_timeline_ts >= 60.0:
             state.last_timeline_ts = _time.time()
             snap = {
                 "ts": state.last_timeline_ts,
@@ -462,7 +602,7 @@ async def _process_loop() -> None:
                     if tracks.tracker_id is None or tracks.tracker_id[i] is None:
                         continue
                     tid = int(tracks.tracker_id[i])
-                    cls_name = state.counter.cls_name(tracks, i)
+                    cls_name = _resolve_cls_name(tracks, i)
                     x1, y1, x2, y2 = tracks.xyxy[i]
                     conf = float(tracks.confidence[i]) if tracks.confidence is not None else 0.0
                     beh_data = behaviors_now.get(tid, {})
@@ -544,6 +684,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # v4
     state.behavior = BehaviorAnalyzer()
     state.sensor = SimulatedEnvironmentSensor()
+    # size classifier: 'bird' (COCO 14) -> 'pintainho' ou 'galinha' por bbox
+    state.size_classifier = SizeClassifier(
+        area_threshold_px2=settings.chick_area_threshold_px2,
+        chick_label=settings.chick_label,
+        hen_label=settings.hen_label,
+    )
 
     state.pending_namer_loop = asyncio.get_running_loop()
 
@@ -640,7 +786,41 @@ async def api_state():
         "analytics": state.latest_analytics,
         "sensor": sensor,
         "palette": state.palette_heatmap.stats() if state.palette_heatmap else None,
+        "size_classifier": state.size_classifier.stats() if state.size_classifier else None,
+        "identified_birds": list(state.identified_birds.values()),
     })
+
+
+@app.get("/api/identified")
+async def api_identified():
+    """Lista de aves atualmente identificadas (galinhas/pintainhos vivos no sistema)."""
+    birds = list(state.identified_birds.values())
+    birds.sort(key=lambda b: (b.get("type", ""), b.get("track_id", 0)))
+    # contagem por tipo (pinto/galinha/galo do pinteiro.pt)
+    by_type: dict[str, int] = {}
+    for b in birds:
+        t = b.get("type", "?")
+        by_type[t] = by_type.get(t, 0) + 1
+    return JSONResponse({
+        "count": len(birds),
+        "by_type": by_type,
+        "pintainhos": by_type.get("pinto", 0) + by_type.get("pintainho", 0),
+        "galinhas": by_type.get("galinha", 0),
+        "galos": by_type.get("galo", 0),
+        "birds": birds,
+    })
+
+
+@app.get("/api/events")
+async def api_events(limit: int = Query(default=50, ge=1, le=500)):
+    """Ultimos N eventos persistidos (bird_identified, bird_lost, timeline_snapshot)."""
+    if state.repo is None:
+        return JSONResponse({"events": []})
+    try:
+        rows = state.repo.recent_events(limit=limit, kind_filter=None)
+        return JSONResponse({"events": rows})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/api/labels")
@@ -779,6 +959,35 @@ async def api_timeline(hours: int = Query(default=24, ge=1, le=72)):
         "granularity_seconds": 60,
         "hours_window": hours,
     })
+
+
+# ===== Size classifier (pintainho vs galinha por bbox) =====
+@app.get("/api/size-classifier")
+async def api_size_classifier_get():
+    if state.size_classifier is None:
+        return JSONResponse({"error": "size_classifier nao inicializado"}, status_code=503)
+    return JSONResponse(state.size_classifier.stats())
+
+
+@app.patch("/api/size-classifier")
+async def api_size_classifier_patch(request: Request):
+    """Atualiza o threshold de area (em px2) usado para classificar pintainho vs galinha.
+    Body: {area_threshold_px2: <float>}
+    """
+    if state.size_classifier is None:
+        return JSONResponse({"error": "size_classifier nao inicializado"}, status_code=503)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "body precisa ser JSON"}, status_code=400)
+    try:
+        thr = float(body["area_threshold_px2"])
+    except (KeyError, ValueError, TypeError) as e:
+        return JSONResponse({"error": f"parametros invalidos: {e}"}, status_code=400)
+    if thr <= 0:
+        return JSONResponse({"error": "area_threshold_px2 deve ser > 0"}, status_code=400)
+    state.size_classifier.set_threshold(thr)
+    return JSONResponse({"ok": True, "stats": state.size_classifier.stats()})
 
 
 # ===== Palette ROI (regiao do cocho/palete) =====

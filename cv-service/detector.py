@@ -29,4 +29,11 @@ class Detector:
         )
         if not results:
             return sv.Detections.empty()
-        return sv.Detections.from_ultralytics(results[0])
+        det = sv.Detections.from_ultralytics(results[0])
+        # Preserva o mapeamento class_id -> class_name (pinto/galinha/galo) que se perde
+        # ao converter de ultralytics para supervision
+        try:
+            det.names = dict(results[0].names)
+        except Exception:
+            pass
+        return det

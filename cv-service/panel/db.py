@@ -79,5 +79,10 @@ class Database:
     def executescript(self, sql: str) -> None:
         self.conn.executescript(sql)
 
+    def query(self, sql: str, params: tuple = ()) -> list:
+        """SELECT helper: executa e retorna todas as linhas como lista de tuplas."""
+        cur = self.conn.execute(sql, params)
+        return cur.fetchall()
+
     def commit(self) -> None:
         self.conn.commit()

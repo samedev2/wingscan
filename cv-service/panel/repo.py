@@ -192,3 +192,24 @@ class PanelRepo:
             (now, kind, json.dumps(payload or {})),
         )
         self.db.commit()
+
+    def recent_events(self, limit: int = 50, kind_filter: str | None = None) -> list[dict]:
+        """Ultimos N eventos, mais recentes primeiro. kind_filter opcional."""
+        if kind_filter:
+            rows = self.db.query(
+                "SELECT ts, kind, payload FROM panel_events WHERE kind = ? ORDER BY id DESC LIMIT ?",
+                (kind_filter, int(limit)),
+            )
+        else:
+            rows = self.db.query(
+                "SELECT ts, kind, payload FROM panel_events ORDER BY id DESC LIMIT ?",
+                (int(limit),),
+            )
+        out: list[dict] = []
+        for ts, kind, payload in rows:
+            try:
+                p = json.loads(payload) if payload else {}
+            except Exception:
+                p = {"raw": payload}
+            out.append({"ts": ts, "kind": kind, "payload": p})
+        return out

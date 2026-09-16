@@ -42,8 +42,8 @@ class Settings:
     video_path: str = _env_str("CV_VIDEO_PATH", "")
     video_loop: bool = _env_str("CV_VIDEO_LOOP", "1") not in ("0", "false", "")
 
-    # Modelo
-    model: str = _env_str("CV_MODEL", "yolov8n.pt")
+    # Modelo (pinteiro.pt = YOLO11n treinado em pinto/galinha/galo, absorvido do OlhoNoPinto)
+    model: str = _env_str("CV_MODEL", "pinteiro.pt")
     confidence: float = _env_float("CV_CONFIDENCE", 0.35)
 
     # Contagem (linha virtual)
@@ -71,6 +71,12 @@ class Settings:
     # Server
     host: str = _env_str("CV_HOST", "127.0.0.1")
     port: int = _env_int("CV_PORT", 8000)
+
+    # Size classifier: separa 'bird' (COCO 14) em 'pintainho' (bbox pequena)
+    # ou 'galinha' (bbox grande) por area da bounding box.
+    chick_area_threshold_px2: float = _env_float("CV_CHICK_AREA_PX2", 8000.0)
+    chick_label: str = _env_str("CV_CHICK_LABEL", "pintainho")
+    hen_label: str = _env_str("CV_HEN_LABEL", "galinha")
 
 
 settings = Settings()

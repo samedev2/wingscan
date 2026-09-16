@@ -1,0 +1,14 @@
+# BoT-SORT com re-identificação por aparência (features do próprio detector) para reencontrar
+# a ave depois de oclusões. Câmera fixa: sem compensação de movimento global.
+tracker_type: botsort
+track_high_thresh: 0.3
+track_low_thresh: 0.1
+new_track_thresh: 0.45
+track_buffer: 150
+match_thresh: 0.85
+fuse_score: True
+gmc_method: none
+proximity_thresh: 0.3    # IoU mínima para considerar a aparência na associação
+appearance_thresh: 0.6   # similaridade mínima de aparência
+with_reid: True
+model: auto

@@ -1,0 +1,9 @@
+# ByteTrack ajustado para cercado fechado com câmera fixa: as aves não saem de cena,
+# então uma trilha perdida (oclusão, ave embaixo da galinha) é mantida por mais tempo.
+tracker_type: bytetrack
+track_high_thresh: 0.3   # detecções acima disso entram na 1ª associação
+track_low_thresh: 0.1    # detecções fracas ainda podem continuar uma trilha existente
+new_track_thresh: 0.45   # só abre trilha (ID novo) com detecção confiante
+track_buffer: 150        # quadros que uma ave sumida é mantida (~6 s a 25 fps)
+match_thresh: 0.85       # custo máximo de associação (1 - IoU); maior = mais tolerante a movimento
+fuse_score: True

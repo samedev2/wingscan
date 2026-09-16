@@ -190,48 +190,50 @@ async def _process_loop() -> None:
             traceback.print_exc()
             await asyncio.sleep(0.1)
             continue
-            if not ok or frame is None:
-                # vídeo chegou ao fim — se loop ligado, volta ao início
-                if settings.video_path and settings.video_loop:
-                    try:
-                        # === detecta/soma reset de loop ===
-                        # salva contagens do loop atual no acumulado
-                        if state.counter is not None:
-                            for cls, st in state.counter.estado().items():
-                                acc = state.lifetime_contagens.setdefault(
-                                    cls, {"in": 0, "out": 0, "current": 0}
-                                )
-                                acc["in"] += st["in"]
-                                acc["out"] += st["out"]
-                                acc["current"] += st["current"]
-                            state.counter.reset()
-                        if state.behavior is not None:
-                            state.behavior = BehaviorAnalyzer()  # zera histórico de estados
-                        if state.heatmap is not None:
-                            state.heatmap.reset()  # zera heatmap acumulado
-                        if state.palette_heatmap is not None:
-                            state.palette_heatmap.reset()  # zera cold wave
-                        if state.paths is not None:
-                            state.paths = PathTracker(
-                                max_points_per_track=settings.path_max_points,
-                                max_age_seconds=settings.path_max_age,
-                            )
-                        state.loop_count += 1
-                        state._frame_counter = 0
-                        state._prev_pos_frames = 0.0
-                        print(
-                            f"[loop #{state.loop_count}] reset OK — "
-                            f"lifetime_contagens={ {k: dict(v) for k, v in state.lifetime_contagens.items()} }"
-                        )
 
-                        state.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                        ok, frame = await asyncio.to_thread(state.cap.read)
-                    except Exception as e:
-                        print(f"[loop] erro no reset: {e}")
-                        ok = False
-                if not ok or frame is None:
-                    await asyncio.sleep(0.05)
-                    continue
+        # vídeo chegou ao fim (read retornou (False, None) sem exceção) —
+        # se loop ligado, volta ao início; senão dá um respiro e segue
+        if not ok or frame is None:
+            if settings.video_path and settings.video_loop:
+                try:
+                    # === detecta/soma reset de loop ===
+                    # salva contagens do loop atual no acumulado
+                    if state.counter is not None:
+                        for cls, st in state.counter.estado().items():
+                            acc = state.lifetime_contagens.setdefault(
+                                cls, {"in": 0, "out": 0, "current": 0}
+                            )
+                            acc["in"] += st["in"]
+                            acc["out"] += st["out"]
+                            acc["current"] += st["current"]
+                        state.counter.reset()
+                    if state.behavior is not None:
+                        state.behavior = BehaviorAnalyzer()  # zera histórico de estados
+                    if state.heatmap is not None:
+                        state.heatmap.reset()  # zera heatmap acumulado
+                    if state.palette_heatmap is not None:
+                        state.palette_heatmap.reset()  # zera cold wave
+                    if state.paths is not None:
+                        state.paths = PathTracker(
+                            max_points_per_track=settings.path_max_points,
+                            max_age_seconds=settings.path_max_age,
+                        )
+                    state.loop_count += 1
+                    state._frame_counter = 0
+                    state._prev_pos_frames = 0.0
+                    print(
+                        f"[loop #{state.loop_count}] reset OK — "
+                        f"lifetime_contagens={ {k: dict(v) for k, v in state.lifetime_contagens.items()} }"
+                    )
+
+                    state.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    ok, frame = await asyncio.to_thread(state.cap.read)
+                except Exception as e:
+                    print(f"[loop] erro no reset: {e}")
+                    ok = False
+            if not ok or frame is None:
+                await asyncio.sleep(0.05)
+                continue
 
         h, w = frame.shape[:2]
         if (w, h) != (state.frame_w, state.frame_h):
@@ -312,7 +314,8 @@ async def _process_loop() -> None:
             if tid in state.identified_birds:
                 rec = state.identified_birds[tid]
                 rec["last_seen"] = now_ts
-                rec["current_state"] = beh.state
+                # beh é um dict (valores de behaviors_now), não um TrackBehavior — usar [] não .
+                rec["current_state"] = beh["state"]
                 rec["frames_seen"] = rec.get("frames_seen", 1) + 1
         # cleanup: remove identificado se não visto por mais de 30s
         stale = [

@@ -67,10 +67,10 @@ export class VirtualPTZ {
     s.dolly.enabled = false;    // zoom tratado via translation Z (first-person não tem dolly)
 
     // Limpa keybindings default e configura PTZ.
-    const kb = s.keyBindings;
-    for (const k of [...kb.keys()]) {
-      kb.delete(k);
-    }
+    // v6 API: keyBindings está dentro de settings.input.keyBindings, e a única
+    // forma de limpar é .clear() (Bindings não expõe .keys()/iteradores).
+    const kb = s.input.keyBindings;
+    kb.clear();
     kb.set("KeyA", "move-left");      // X-
     kb.set("KeyD", "move-right");     // X+
     kb.set("KeyW", "move-forward");   // Z- = zoom in
@@ -79,14 +79,12 @@ export class VirtualPTZ {
     kb.set("ArrowRight", "move-right");
     kb.set("ArrowUp", "move-up");     // Y+ = tilt up
     kb.set("ArrowDown", "move-down"); // Y- = tilt down
-    kb.set("KeyR", "boost");          // Shift Left removido; "R" como boost
+    kb.set("KeyR", "boost");          // "R" como boost
     kb.set("KeyZ", "move-down");      // alias
 
     // Limpa pointer bindings (vamos tratar mouse manualmente).
-    const pb = s.pointerBindings;
-    for (const k of [...pb.keys()]) {
-      pb.delete(k);
-    }
+    const pb = s.input.pointerBindings;
+    pb.clear();
   }
 
   /** Inicia o loop de update() com rAF. */

@@ -16,7 +16,7 @@ controle-de-movimento/
 │   ├── counter.py      ← conta IN/OUT por cruzamento de linha virtual
 │   ├── storage.py      ← grava JSON + CSV por turno
 │   └── app.py          ← expõe /video_feed (MJPEG), /ws/events, /api/state
-└── web/                ← Node + Vite + Three.js (porta 5173)
+└── web/                ← Node + Vite + Three.js (porta 5175)
     └── src/
         ├── ptz/VirtualPTZ.ts  ← usa spatial-controls como cérebro de pan/tilt/zoom
         ├── ptz/Overlay.ts      ← canvas com viewport PTZ + HUD
@@ -48,7 +48,7 @@ cd web
 npm install
 npm run dev
 ```
-Abre `http://127.0.0.1:5173`.
+Abre `http://127.0.0.1:5175`.
 
 O Vite faz proxy de `/cv/*` → `http://127.0.0.1:8000`, então o front fala direto.
 

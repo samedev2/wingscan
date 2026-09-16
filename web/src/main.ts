@@ -1,25 +1,32 @@
 /**
- * Entry point: orquestra MJPEG, WS eventos, PTZ virtual e painéis.
+ * Entry point v4: orquestra MJPEG, WS eventos, PTZ virtual, naming panel,
+ * analytics panel, system panel, heatmap/paths overlay, inline namer.
  *
- * URL base do cv-service é resolvida assim:
- *  - Em dev (Vite), o proxy em /cv -> http://127.0.0.1:8000 já está configurado.
- *  - Se o front for hospedado junto com o cv-service, basta apontar a env.
+ * Mudanças v4: layout mudou para dois painéis (vídeo à esquerda, analytics à
+ * direita). Painel de Sistema / Heatmap / Classes / Counter / Eventos ficam
+ * atrás de <details> para não competir com o painel de analytics.
  */
-import { MjpegClient } from "./stream/MjpegClient";
+import { JpegPollingClient } from "./stream/JpegPollingClient";
 import { EventsClient, type WsEvent } from "./stream/EventsClient";
 import { CounterPanel } from "./counter/CounterPanel";
+import { LifetimeCounterPanel } from "./counter/LifetimeCounterPanel";
+import { NamingPanel, type LabelEntry } from "./naming/NamingPanel";
+import { InlineNamer, type TrackInfo } from "./naming/InlineNamer";
+import { PanelStore } from "./panel/PanelStore";
+import { SystemPanel } from "./panel/SystemPanel";
+import { HeatmapOverlay } from "./canvas/HeatmapOverlay";
+import { PathOverlay } from "./canvas/PathOverlay";
 import { PTZOverlay } from "./ptz/Overlay";
 import { VirtualPTZ } from "./ptz/VirtualPTZ";
+import { AnalyticsPanel } from "./analytics/AnalyticsPanel";
+import { SourceSwitcher } from "./source/SourceSwitcher";
 
-// Em dev o front roda em :5173 e o Vite faz proxy de /cv/* -> :8000.
-// Em produção servidos juntos, deixe CV_BASE vazio para usar a mesma origem.
 const CV_BASE = (import.meta.env?.VITE_CV_BASE as string | undefined) ?? "/cv";
 
 function wsUrlFor(base: string): string {
   const clean = base.replace(/\/$/, "");
   if (clean.startsWith("http://")) return clean.replace(/^http/, "ws") + "/ws/events";
   if (clean.startsWith("https://")) return clean.replace(/^https/, "wss") + "/ws/events";
-  // relativo (proxy do Vite) — usa mesmo host:porta do front
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${window.location.host}${clean}/ws/events`;
 }
@@ -31,34 +38,58 @@ function init(): void {
     return el as T;
   };
 
-  const stage = $("stage") as HTMLDivElement;
-  const videoWrap = $("video-wrap") as HTMLDivElement;
   const mjpegImg = $("mjpeg") as HTMLImageElement;
   const overlayCanvas = $("overlay") as HTMLCanvasElement;
+  const heatmapCanvas = $("heatmap-canvas") as HTMLCanvasElement;
+  const pathsCanvas = $("paths-canvas") as HTMLCanvasElement;
   const counterBody = $("counter-body") as HTMLTableSectionElement;
+  const lifetimeBody = $("lifetime-body") as HTMLTableSectionElement;
+  const lifetimeSummary = $("lifetime-summary") as HTMLElement;
+  const labelsList = $("labels-list") as HTMLDivElement;
   const eventsList = $("events") as HTMLUListElement;
+  const newItemBanner = $("new-item-banner") as HTMLDivElement;
   const connDot = $("conn-dot") as HTMLSpanElement;
   const connText = $("conn-text") as HTMLSpanElement;
+  const systemPanel = $("system-panel") as HTMLDivElement;
+  const heatmapTabs = $("heatmap-tabs") as HTMLDivElement;
+  const analyticsEl = $("analytics") as HTMLDivElement;
+  const btnSource = $("btn-source") as HTMLButtonElement;
 
-  const cvUrl = $("cv-url") as HTMLElement;
-  const cvCamera = $("cv-camera") as HTMLElement;
-  const cvModel = $("cv-model") as HTMLElement;
-  const cvRes = $("cv-resolution") as HTMLElement;
-  const cvLine = $("cv-line") as HTMLElement;
-  cvUrl.textContent = CV_BASE === "/cv" ? "(proxy Vite → 127.0.0.1:8000)" : CV_BASE;
-
-  // ---- PTZ + Overlay ----
+  // PTZ + Overlay
   const overlay = new PTZOverlay(overlayCanvas);
   const ptz = new VirtualPTZ(document.body);
   ptz.start();
   ptz.onChange((s) => overlay.update(s));
 
-  // Mouse drag no stage = pan/tilt manual (independente do spatial-controls).
-  // Scroll = zoom manual. Esses são "atalhos" — keyboard passa pela lib.
+  const heatmapOv = new HeatmapOverlay(heatmapCanvas, CV_BASE);
+  const pathOv = new PathOverlay(pathsCanvas, CV_BASE);
+  // trilhas (paths) começam desligadas — geram borrão quando há várias aves paradas
+  pathOv.setEnabled(false);
+  const inlineNamer = new InlineNamer(document.body, heatmapCanvas, CV_BASE);
+  const analyticsPanel = new AnalyticsPanel(analyticsEl);
+
+  const panelStore = new PanelStore(CV_BASE, (s) => {
+    systemPanelUi.setSettings(s);
+  });
+  const systemPanelUi = new SystemPanel(systemPanel, panelStore);
+  systemPanelUi.onHeatmapToggle = (on) => {
+    heatmapOv.setEnabled(on);
+    if (on) heatmapOv.start();
+  };
+  systemPanelUi.onHeatmapClear = () => {
+    fetch(`${CV_BASE}/api/heatmap`, { method: "DELETE" });
+  };
+  systemPanelUi.onPathsToggle = (on) => {
+    pathOv.setEnabled(on);
+  };
+
+  const videoWrap = $("video-wrap") as HTMLDivElement;
   let dragging = false;
   let lastX = 0;
   let lastY = 0;
   videoWrap.addEventListener("pointerdown", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === "CANVAS") return;
     dragging = true;
     lastX = e.clientX;
     lastY = e.clientY;
@@ -69,7 +100,6 @@ function init(): void {
     const rect = videoWrap.getBoundingClientRect();
     const dx = (e.clientX - lastX) / rect.width;
     const dy = (e.clientY - lastY) / rect.height;
-    // Aplica direto no Vector3 do PTZ; damping da lib suaviza depois.
     ptz.ptz.x -= dx * 1.2;
     ptz.ptz.y += dy * 1.2;
     lastX = e.clientX;
@@ -91,40 +121,132 @@ function init(): void {
     { passive: false },
   );
 
-  // Tecla "0" reseta
+  const onCanvasClick = (canvas: HTMLCanvasElement) => (e: MouseEvent) => {
+    const rect = canvas.getBoundingClientRect();
+    const vx = e.clientX - rect.left;
+    const vy = e.clientY - rect.top;
+    inlineNamer.onCanvasClick(vx, vy);
+  };
+  heatmapCanvas.addEventListener("click", onCanvasClick(heatmapCanvas));
+  pathsCanvas.addEventListener("click", onCanvasClick(pathsCanvas));
+  overlayCanvas.addEventListener("click", onCanvasClick(overlayCanvas));
+
   window.addEventListener("keydown", (e) => {
     if (e.code === "Digit0") ptz.reset();
   });
 
-  // ---- Counter ----
   const counter = new CounterPanel(counterBody);
+  const lifetimeCounter = new LifetimeCounterPanel(lifetimeBody, lifetimeSummary);
+  const naming = new NamingPanel(labelsList);
 
-  // ---- MJPEG + WS ----
-  const mjpeg = new MjpegClient(mjpegImg, CV_BASE);
-  mjpeg.start((err) => {
-    console.warn("[mjpeg] erro, tentando reconectar...", err);
-    setStatus(false);
+  const sourceSwitcher = new SourceSwitcher(document.body, CV_BASE);
+  sourceSwitcher.setOnChange(() => {
+    // reset local pra forçar refresh rápido do stream/heatmap/paths
+    refreshLabels();
+    refreshHeatmapClasses();
+    refreshTimeline();
   });
+  btnSource.addEventListener("click", () => sourceSwitcher.open());
+
+  async function refreshLabels(): Promise<void> {
+    try {
+      const r = await fetch(`${CV_BASE}/api/labels`);
+      if (!r.ok) return;
+      const data = (await r.json()) as { labels: LabelEntry[] };
+      naming.setLabels(data.labels || []);
+    } catch { /* ok */ }
+  }
+
+  naming.onRename = async (oldName, newName) => {
+    try {
+      const r = await fetch(`${CV_BASE}/api/labels/${encodeURIComponent(oldName)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_name: newName }),
+      });
+      if (r.ok) {
+        await refreshLabels();
+        await refreshHeatmapClasses();
+      }
+    } catch (e) {
+      alert(`Erro: ${e}`);
+    }
+  };
+  naming.onDelete = async (name) => {
+    try {
+      const r = await fetch(`${CV_BASE}/api/labels/${encodeURIComponent(name)}`, { method: "DELETE" });
+      if (r.ok) {
+        await refreshLabels();
+        await refreshHeatmapClasses();
+      }
+    } catch (e) { alert(`Erro: ${e}`); }
+  };
+  inlineNamer.setOnRename(() => {
+    refreshLabels();
+    refreshHeatmapClasses();
+  });
+
+  heatmapTabs.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest("button.tab") as HTMLButtonElement | null;
+    if (!btn) return;
+    heatmapTabs.querySelectorAll("button.tab").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const cls = btn.dataset.cls || null;
+    heatmapOv.setFilter(cls && cls.length > 0 ? cls : null);
+  });
+
+  async function refreshHeatmapClasses(): Promise<void> {
+    try {
+      const r = await fetch(`${CV_BASE}/api/heatmap/info`);
+      if (!r.ok) return;
+      const info = (await r.json()) as { classes: string[] };
+      rebuildHeatmapTabs(info.classes || []);
+      heatmapOv.setClasses(info.classes || []);
+    } catch { /* ok */ }
+  }
+
+  function rebuildHeatmapTabs(classes: string[]): void {
+    const existing = heatmapTabs.querySelector("button.tab.active");
+    const activeCls = existing ? (existing as HTMLElement).dataset.cls || "" : "";
+    heatmapTabs.innerHTML = "";
+    const all = document.createElement("button");
+    all.className = "tab" + (activeCls === "" ? " active" : "");
+    all.dataset.cls = "";
+    all.textContent = "todas";
+    heatmapTabs.appendChild(all);
+    for (const cls of classes) {
+      const b = document.createElement("button");
+      b.className = "tab" + (activeCls === cls ? " active" : "");
+      b.dataset.cls = cls;
+      b.textContent = cls;
+      heatmapTabs.appendChild(b);
+    }
+  }
+
+  const stream = new JpegPollingClient(mjpegImg, CV_BASE, 120);
+  stream.start();
 
   const events = new EventsClient(wsUrlFor(CV_BASE));
   events.start((connected) => setStatus(connected));
+
+  let newItemHideTimer: number | null = null;
+
   events.onEvent((e: WsEvent) => {
     if (e.type === "init") {
-      cvCamera.textContent = "—";
-      cvModel.textContent = "—";
-      cvRes.textContent = `${e.resolution[0]}×${e.resolution[1]}`;
-      cvLine.textContent = `${e.line_orientation} @ ${e.line_position.toFixed(2)}`;
       counter.setState(e.contagens);
-      // fetch /api/state para dados completos
-      fetch(`${CV_BASE}/api/state`)
-        .then((r) => r.json())
-        .then((s) => {
-          if (s.camera_id) cvCamera.textContent = s.camera_id;
-          if (s.model) cvModel.textContent = s.model;
-          if (s.resolution) cvRes.textContent = s.resolution;
-          if (s.classes) cvLine.textContent = `${s.line_orientation} @ ${s.line_position} — classes: ${s.classes.join(",")}`;
-        })
-        .catch(() => {});
+      naming.setLabels(e.labels || []);
+      if (e.analytics) analyticsPanel.setAnalytics(e.analytics);
+      if (e.sensor) analyticsPanel.setSensor(e.sensor);
+      if (e.panel && Object.keys(e.panel).length > 0) {
+        systemPanelUi.setSettings(e.panel as never);
+      }
+      panelStore.load();
+      heatmapOv.start();
+      // pathOv só inicia se o painel pedir (ver systemPanelUi.onPathsToggle)
+      // começa desligado pra não borrar a tela com várias galinhas paradas
+      refreshHeatmapClasses();
+      refreshTimeline();
+      if (e.panel?.paths_enabled) pathOv.setEnabled(true);
     } else if (e.type === "evento") {
       const li = document.createElement("li");
       li.className = e.direcao;
@@ -132,22 +254,68 @@ function init(): void {
       li.textContent = `${ts}  #${e.track_id}  ${e.classe}  → ${e.direcao.toUpperCase()}  (${(e.conf * 100).toFixed(0)}%)`;
       eventsList.prepend(li);
       while (eventsList.children.length > 50) eventsList.removeChild(eventsList.lastChild!);
-    } else if (e.type === "ping") {
-      // keep-alive, ignora
-    }
+    } else if (e.type === "novo_item") {
+      newItemBanner.innerHTML = `
+        <img alt="crop" src="data:image/jpeg;base64,${e.crop}" />
+        <div class="new-item-info">
+          <div class="muted">novo item detectado</div>
+          <div class="new-item-name">${escapeHtml(e.name)}</div>
+          <div class="muted small">track #${e.track_id} · similaridade máx ${(e.sim * 100).toFixed(0)}%</div>
+        </div>
+      `;
+      newItemBanner.classList.add("show");
+      if (newItemHideTimer !== null) window.clearTimeout(newItemHideTimer);
+      newItemHideTimer = window.setTimeout(() => {
+        newItemBanner.classList.remove("show");
+      }, 4000);
+      naming.upsertLabel({ name: e.name, samples: 1 });
+      refreshLabels();
+      refreshHeatmapClasses();
+    } else if (e.type === "tracks") {
+      inlineNamer.setTracks(e.tracks as TrackInfo[]);
+    } else if (e.type === "track_entered") {
+      // cada galinha nova no frame → banner rápido
+      newItemBanner.innerHTML = `
+        <div class="new-item-info">
+          <div class="muted">nova ave detectada</div>
+          <div class="new-item-name">#${e.track_id} ${escapeHtml(e.classe)}</div>
+          <div class="muted small">confiança ${(e.conf * 100).toFixed(0)}%</div>
+        </div>
+      `;
+      newItemBanner.classList.add("show");
+      if (newItemHideTimer !== null) window.clearTimeout(newItemHideTimer);
+      newItemHideTimer = window.setTimeout(() => {
+        newItemBanner.classList.remove("show");
+      }, 2000);
+    } else if (e.type === "ping") { /* keep-alive */ }
   });
 
-  // Polling leve do /api/state para o counter atualizar mesmo sem cruzamento novo
+  // Polling: estado + analytics + sensor + timeline
   setInterval(async () => {
     try {
       const r = await fetch(`${CV_BASE}/api/state`);
       if (!r.ok) return;
       const s = await r.json();
+      if (s.analytics) analyticsPanel.setAnalytics(s.analytics);
+      if (s.sensor) analyticsPanel.setSensor(s.sensor);
+      if (s.palette) analyticsPanel.setPalette(s.palette);
       if (s.contagens) counter.setState(s.contagens);
-    } catch {
-      // ok, segue tentando
-    }
+      if (s.lifetime_contagens) {
+        lifetimeCounter.setState(s.lifetime_contagens, s.loop_count ?? 0);
+      }
+    } catch { /* ok */ }
   }, 1000);
+
+  async function refreshTimeline(): Promise<void> {
+    try {
+      const r = await fetch(`${CV_BASE}/api/timeline?hours=24`);
+      if (!r.ok) return;
+      const data = (await r.json()) as { entries: { ts: number; total: number; ativa: number; repouso: number; anomalo: number; normal: number; }[] };
+      analyticsPanel.setTimeline(data.entries || []);
+    } catch { /* ok */ }
+  }
+  // Atualiza timeline a cada 60s
+  setInterval(refreshTimeline, 60000);
 
   function setStatus(ok: boolean): void {
     if (ok) {
@@ -160,8 +328,39 @@ function init(): void {
   }
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function runInit(): void {
+  try {
+    init();
+  } catch (e) {
+    const msg = e instanceof Error ? `${e.message}\n\n${e.stack}` : String(e);
+    const banner = document.createElement("pre");
+    banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#f85149;color:#fff;padding:16px;z-index:99999;font-size:13px;white-space:pre-wrap;max-height:60vh;overflow:auto;";
+    banner.textContent = "❌ ERRO JS:\n\n" + msg;
+    document.body.appendChild(banner);
+    throw e;
+  }
+}
+
+window.addEventListener("error", (ev) => {
+  const banner = document.createElement("pre");
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#d29922;color:#000;padding:16px;z-index:99998;font-size:13px;white-space:pre-wrap;max-height:60vh;overflow:auto;";
+  banner.textContent = "⚠ ERRO NÃO TRATADO:\n\n" + (ev.error?.stack || ev.message);
+  document.body.appendChild(banner);
+});
+
+window.addEventListener("unhandledrejection", (ev) => {
+  const banner = document.createElement("pre");
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#d29922;color:#000;padding:16px;z-index:99998;font-size:13px;white-space:pre-wrap;max-height:60vh;overflow:auto;";
+  banner.textContent = "⚠ PROMISE REJEITADA:\n\n" + (ev.reason?.stack || String(ev.reason));
+  document.body.appendChild(banner);
+});
+
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
+  document.addEventListener("DOMContentLoaded", runInit);
 } else {
-  init();
+  runInit();
 }

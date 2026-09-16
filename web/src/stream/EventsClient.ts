@@ -1,10 +1,14 @@
 /**
  * EventsClient: WebSocket wrapper para /ws/events do cv-service.
  *
- * - auto-reconnect com backoff exponencial até 10s
- * - emite `init` no connect, `evento` em cruzamentos, `ping` para keep-alive
+ * Tipos de mensagem:
+ *   - init:        estado inicial ao conectar
+ *   - evento:      cruzamento de linha (IN/OUT)
+ *   - novo_item:   detecção de item nunca visto — auto-nomeado ItemN
+ *   - tracks:      snapshot das tracks atuais (pra hit-test no canvas)
+ *   - ping:        keep-alive
  */
-export type EventKind = "init" | "evento" | "ping";
+export type EventKind = "init" | "evento" | "novo_item" | "tracks" | "ping";
 
 export interface CrossEvent {
   type: "evento";
@@ -21,9 +25,31 @@ export interface InitEvent {
   resolution: [number, number];
   line_orientation: "horizontal" | "vertical";
   line_position: number;
+  labels: Array<{ name: string; samples: number; created_at?: string }>;
+  panel: Record<string, unknown>;
 }
 
-export type WsEvent = InitEvent | CrossEvent | { type: "ping" };
+export interface NewItemEvent {
+  type: "novo_item";
+  track_id: number;
+  name: string;
+  sim: number;
+  crop: string; // base64 JPEG
+}
+
+export interface TrackSnapEntry {
+  track_id: number;
+  cls_name: string;
+  bbox: [number, number, number, number];
+  conf: number;
+}
+
+export interface TracksEvent {
+  type: "tracks";
+  tracks: TrackSnapEntry[];
+}
+
+export type WsEvent = InitEvent | CrossEvent | NewItemEvent | TracksEvent | { type: "ping" };
 
 export class EventsClient {
   private url: string;

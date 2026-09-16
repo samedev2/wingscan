@@ -30,6 +30,9 @@ class _ClassState:
     out_count: int = 0
     current: int = 0
     tracks: dict[int, _TrackInfo] = field(default_factory=dict)
+    # contagem por track_id único: cada galinha que aparece no frame soma 1
+    seen_ids: set[int] = field(default_factory=set)
+    unique_count: int = 0
 
 
 class Counter:
@@ -162,6 +165,35 @@ class Counter:
 
     def estado(self) -> dict[str, dict[str, int]]:
         return {
-            s.cls_name: {"in": s.in_count, "out": s.out_count, "current": s.current}
+            s.cls_name: {
+                "in": s.in_count,
+                "out": s.out_count,
+                "current": s.current,
+                "unique": s.unique_count,
+            }
             for s in self.states.values()
         }
+
+    def reset(self) -> None:
+        """Zera IN/OUT/current/unique mas mantém a lista de classes conhecida."""
+        for s in self.states.values():
+            s.in_count = 0
+            s.out_count = 0
+            s.current = 0
+            s.tracks.clear()
+            s.seen_ids.clear()
+            s.unique_count = 0
+
+    def register(self, track_id: int, cls_name: str) -> bool:
+        """Registra um track_id. Retorna True se for a primeira vez
+        que aparece (galinha nova no frame) — incrementa unique_count."""
+        st = self._state_for(cls_name)
+        if track_id in st.seen_ids:
+            return False
+        st.seen_ids.add(track_id)
+        st.unique_count += 1
+        return True
+
+    def is_known(self, track_id: int, cls_name: str) -> bool:
+        st = self._state_for(cls_name)
+        return track_id in st.seen_ids

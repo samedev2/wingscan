@@ -27,3 +27,11 @@ Thumbs.db
 
 # Logs
 *.log
+*.log.err
+*.err
+
+# SQLite v3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

@@ -40,7 +40,12 @@ export class PathOverlay {
 
   setEnabled(on: boolean): void {
     this.enabled = on;
-    if (!on) this.clear();
+    if (!on) {
+      this.clear();
+      this.stop();
+    } else if (this.timer === null && !this.disposed) {
+      this.start();
+    }
   }
 
   start(intervalMs = 250): void {
@@ -50,7 +55,6 @@ export class PathOverlay {
   }
 
   stop(): void {
-    this.disposed = true;
     if (this.timer !== null) {
       window.clearInterval(this.timer);
       this.timer = null;

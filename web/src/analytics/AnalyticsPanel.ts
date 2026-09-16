@@ -12,6 +12,7 @@ import type { WsEvent } from "../stream/EventsClient";
 
 interface AnalyticsData {
   total: number;
+  unique_total?: number;
   normal: number;
   ativa: number;
   repouso: number;
@@ -39,11 +40,22 @@ interface TimelineEntry {
   normal: number;
 }
 
+interface PaletteStats {
+  inside_now: number;
+  recent_avg_per_frame: number;
+  occupancy_pct: number;
+  total_frames: number;
+  frames_with_chickens: number;
+  roi: { x1: number; y1: number; x2: number; y2: number };
+  wave_intensity: number;
+}
+
 export class AnalyticsPanel {
   private container: HTMLElement;
   private galleryName = "Granja — Galpão 03";
-  private analytics: AnalyticsData = { total: 0, normal: 0, ativa: 0, repouso: 0, anomalo: 0 };
+  private analytics: AnalyticsData = { total: 0, unique_total: 0, normal: 0, ativa: 0, repouso: 0, anomalo: 0 };
   private sensor: SensorData | null = null;
+  private palette: PaletteStats | null = null;
   private timeline: TimelineEntry[] = [];
 
   constructor(container: HTMLElement) {
@@ -60,6 +72,11 @@ export class AnalyticsPanel {
 
   setSensor(s: SensorData): void {
     this.sensor = s;
+    this.render();
+  }
+
+  setPalette(p: PaletteStats): void {
+    this.palette = p;
     this.render();
   }
 
@@ -109,15 +126,25 @@ export class AnalyticsPanel {
       <h3 class="section-title">Análise de Movimentos</h3>
 
       <div class="metrics-cards">
-        <div class="metric-card">
+        <div class="metric-card highlight">
           <div class="metric-icon">🐔</div>
           <div class="metric-body">
-            <div class="metric-label">Total de aves detectadas</div>
+            <div class="metric-label">Aves únicas identificadas</div>
+            <div class="metric-value">
+              <span class="metric-num">${a.unique_total ?? 0}</span>
+            </div>
+            <div class="metric-sub muted">cada galinha conta 1× (track_id novo)</div>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-icon">📍</div>
+          <div class="metric-body">
+            <div class="metric-label">Aves no frame agora</div>
             <div class="metric-value">
               <span class="metric-num">${a.total}</span>
-              <span class="metric-trend up">▲ +${Math.max(1, Math.round(a.total * 0.03))}</span>
             </div>
-            <div class="metric-sub muted">(vs. última hora)</div>
+            <div class="metric-sub muted">bboxes ativas neste momento</div>
           </div>
         </div>
 
@@ -191,6 +218,20 @@ export class AnalyticsPanel {
               <span class="metric-unit">%</span>
             </div>
             <div class="metric-sub ${humStatus === 'Alerta' ? 'alert-sub' : 'muted'}">● ${humStatus}</div>
+          </div>
+        </div>
+
+        <div class="metric-card palette">
+          <div class="metric-icon">🌊</div>
+          <div class="metric-body">
+            <div class="metric-label">Uso do palete (cold wave)</div>
+            <div class="metric-value">
+              <span class="metric-num">—</span>
+            </div>
+            <div class="metric-sub muted">desativado (causava travamento em 2K)</div>
+            <div class="metric-bar">
+              <div class="metric-bar-fill" style="width: 0%;"></div>
+            </div>
           </div>
         </div>
       </div>

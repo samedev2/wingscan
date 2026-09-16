@@ -27,6 +27,7 @@
             <span class="kbd">drag</span> pan &nbsp;
             <span class="kbd">scroll</span> zoom &nbsp;
             <span class="kbd">click bbox</span> nomear
+            <button id="btn-source" class="btn-source" title="Trocar fonte de vídeo">📁 Trocar fonte</button>
           </div>
           <div class="status" id="status">
             <span class="dot" id="conn-dot"></span>
@@ -68,6 +69,21 @@
             </thead>
             <tbody id="counter-body">
               <tr><td colspan="4" class="muted">aguardando dados…</td></tr>
+            </tbody>
+          </table>
+        </details>
+
+        <details class="adv-panel">
+          <summary id="lifetime-summary">Acumulado entre loops</summary>
+          <p class="muted small">Soma das contagens de cada loop do vídeo. Persiste enquanto o cv-service estiver rodando.</p>
+          <table id="lifetime-table">
+            <thead>
+              <tr>
+                <th>classe</th><th>IN</th><th>OUT</th><th>ativos</th>
+              </tr>
+            </thead>
+            <tbody id="lifetime-body">
+              <tr><td colspan="4" class="muted">aguardando o 1º loop terminar…</td></tr>
             </tbody>
           </table>
         </details>

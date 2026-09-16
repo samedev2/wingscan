@@ -9,6 +9,7 @@
 import { JpegPollingClient } from "./stream/JpegPollingClient";
 import { EventsClient, type WsEvent } from "./stream/EventsClient";
 import { CounterPanel } from "./counter/CounterPanel";
+import { LifetimeCounterPanel } from "./counter/LifetimeCounterPanel";
 import { NamingPanel, type LabelEntry } from "./naming/NamingPanel";
 import { InlineNamer, type TrackInfo } from "./naming/InlineNamer";
 import { PanelStore } from "./panel/PanelStore";
@@ -18,6 +19,7 @@ import { PathOverlay } from "./canvas/PathOverlay";
 import { PTZOverlay } from "./ptz/Overlay";
 import { VirtualPTZ } from "./ptz/VirtualPTZ";
 import { AnalyticsPanel } from "./analytics/AnalyticsPanel";
+import { SourceSwitcher } from "./source/SourceSwitcher";
 
 const CV_BASE = (import.meta.env?.VITE_CV_BASE as string | undefined) ?? "/cv";
 
@@ -41,6 +43,8 @@ function init(): void {
   const heatmapCanvas = $("heatmap-canvas") as HTMLCanvasElement;
   const pathsCanvas = $("paths-canvas") as HTMLCanvasElement;
   const counterBody = $("counter-body") as HTMLTableSectionElement;
+  const lifetimeBody = $("lifetime-body") as HTMLTableSectionElement;
+  const lifetimeSummary = $("lifetime-summary") as HTMLElement;
   const labelsList = $("labels-list") as HTMLDivElement;
   const eventsList = $("events") as HTMLUListElement;
   const newItemBanner = $("new-item-banner") as HTMLDivElement;
@@ -49,6 +53,7 @@ function init(): void {
   const systemPanel = $("system-panel") as HTMLDivElement;
   const heatmapTabs = $("heatmap-tabs") as HTMLDivElement;
   const analyticsEl = $("analytics") as HTMLDivElement;
+  const btnSource = $("btn-source") as HTMLButtonElement;
 
   // PTZ + Overlay
   const overlay = new PTZOverlay(overlayCanvas);
@@ -58,6 +63,8 @@ function init(): void {
 
   const heatmapOv = new HeatmapOverlay(heatmapCanvas, CV_BASE);
   const pathOv = new PathOverlay(pathsCanvas, CV_BASE);
+  // trilhas (paths) começam desligadas — geram borrão quando há várias aves paradas
+  pathOv.setEnabled(false);
   const inlineNamer = new InlineNamer(document.body, heatmapCanvas, CV_BASE);
   const analyticsPanel = new AnalyticsPanel(analyticsEl);
 
@@ -129,7 +136,17 @@ function init(): void {
   });
 
   const counter = new CounterPanel(counterBody);
+  const lifetimeCounter = new LifetimeCounterPanel(lifetimeBody, lifetimeSummary);
   const naming = new NamingPanel(labelsList);
+
+  const sourceSwitcher = new SourceSwitcher(document.body, CV_BASE);
+  sourceSwitcher.setOnChange(() => {
+    // reset local pra forçar refresh rápido do stream/heatmap/paths
+    refreshLabels();
+    refreshHeatmapClasses();
+    refreshTimeline();
+  });
+  btnSource.addEventListener("click", () => sourceSwitcher.open());
 
   async function refreshLabels(): Promise<void> {
     try {
@@ -225,9 +242,11 @@ function init(): void {
       }
       panelStore.load();
       heatmapOv.start();
-      pathOv.start();
+      // pathOv só inicia se o painel pedir (ver systemPanelUi.onPathsToggle)
+      // começa desligado pra não borrar a tela com várias galinhas paradas
       refreshHeatmapClasses();
       refreshTimeline();
+      if (e.panel?.paths_enabled) pathOv.setEnabled(true);
     } else if (e.type === "evento") {
       const li = document.createElement("li");
       li.className = e.direcao;
@@ -254,6 +273,20 @@ function init(): void {
       refreshHeatmapClasses();
     } else if (e.type === "tracks") {
       inlineNamer.setTracks(e.tracks as TrackInfo[]);
+    } else if (e.type === "track_entered") {
+      // cada galinha nova no frame → banner rápido
+      newItemBanner.innerHTML = `
+        <div class="new-item-info">
+          <div class="muted">nova ave detectada</div>
+          <div class="new-item-name">#${e.track_id} ${escapeHtml(e.classe)}</div>
+          <div class="muted small">confiança ${(e.conf * 100).toFixed(0)}%</div>
+        </div>
+      `;
+      newItemBanner.classList.add("show");
+      if (newItemHideTimer !== null) window.clearTimeout(newItemHideTimer);
+      newItemHideTimer = window.setTimeout(() => {
+        newItemBanner.classList.remove("show");
+      }, 2000);
     } else if (e.type === "ping") { /* keep-alive */ }
   });
 
@@ -265,7 +298,11 @@ function init(): void {
       const s = await r.json();
       if (s.analytics) analyticsPanel.setAnalytics(s.analytics);
       if (s.sensor) analyticsPanel.setSensor(s.sensor);
+      if (s.palette) analyticsPanel.setPalette(s.palette);
       if (s.contagens) counter.setState(s.contagens);
+      if (s.lifetime_contagens) {
+        lifetimeCounter.setState(s.lifetime_contagens, s.loop_count ?? 0);
+      }
     } catch { /* ok */ }
   }, 1000);
 

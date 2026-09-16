@@ -37,6 +37,10 @@ class Settings:
     width: int = _env_int("CV_WIDTH", 1280)
     height: int = _env_int("CV_HEIGHT", 720)
     fps: int = _env_int("CV_FPS", 30)
+    # Fonte alternativa: caminho de arquivo de vídeo (MP4/AVI/MKV). Se setado,
+    # sobrescreve camera_index. Suporta loop automático para demos longas.
+    video_path: str = _env_str("CV_VIDEO_PATH", "")
+    video_loop: bool = _env_str("CV_VIDEO_LOOP", "1") not in ("0", "false", "")
 
     # Modelo
     model: str = _env_str("CV_MODEL", "yolov8n.pt")
@@ -58,7 +62,7 @@ class Settings:
     # Painel v3 — SQLite + tracking
     db_path: str = _env_str("CV_DB_PATH", "data/controle.db")
     heatmap_enabled: bool = _env_str("CV_HEATMAP", "1") not in ("0", "false", "")
-    paths_enabled: bool = _env_str("CV_PATHS", "1") not in ("0", "false", "")
+    paths_enabled: bool = _env_str("CV_PATHS", "0") not in ("0", "false", "")
     heatmap_decay: float = _env_float("CV_HEATMAP_DECAY", 0.985)
     heatmap_radius: int = _env_int("CV_HEATMAP_RADIUS", 14)
     path_max_points: int = _env_int("CV_PATH_MAX_POINTS", 80)

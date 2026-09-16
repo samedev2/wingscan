@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.claude/
+
+# dados locais
+logs/
+videos/
+runs/
+
+# treino e experimentos ficam fora do repositório
+treino/
+
+# modelos: só o detector do pinteiro é versionado
+modelos/*.pt
+!modelos/pinteiro.pt

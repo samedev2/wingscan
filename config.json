@@ -1,0 +1,69 @@
+{
+  "modelos": {
+    "deteccao": "modelos/pinteiro.pt",
+    "comportamento": "",
+    "confianca": 0.3,
+    "confianca_comportamento": 0.4,
+    "comportamento_a_cada_n_frames": 8,
+    "comportamento_max_por_quadro": 2,
+    "comportamento_classes": ["galinha", "galo", "chicken"],
+    "rastreador": "monitor/rastreadores/pinteiro_bytetrack.yaml",
+    "dispositivo": ""
+  },
+  "rastreio": {
+    "identidade_persistente": true,
+    "raio_base": 0.08,
+    "raio_por_segundo": 0.15,
+    "populacao": {"galinha": 7, "galo": 1}
+  },
+  "mapa_comportamentos": {
+    "feeding": "comendo",
+    "drinking": "bebendo",
+    "pecking": "bicando",
+    "walking": "andando",
+    "running": "agitado",
+    "fighting": "agitado",
+    "menacing": "agitado",
+    "panic movement": "agitado",
+    "sleeping chickens": "descansando",
+    "crouch chicken": "descansando",
+    "resting": "descansando"
+  },
+  "zonas": {
+    "comedouro": [[0.34, 0.31, 0.60, 0.50], [0.77, 0.02, 0.93, 0.15], [0.77, 0.81, 0.93, 0.95]],
+    "bebedouro": [[0.11, 0.00, 0.31, 0.13], [0.70, 0.58, 0.90, 0.71], [0.05, 0.80, 0.26, 0.96]]
+  },
+  "limites": {
+    "sem_comer_s": 1800,
+    "sem_beber_s": 1800,
+    "imovel_s": 1200
+  },
+  "analise": {
+    "janela_suavizacao": 7,
+    "vel_andando": 0.04,
+    "vel_agitado": 0.3,
+    "agitacao_fracao": 0.5,
+    "esquecer_apos_s": 600,
+    "log_entrada_a_cada_s": 2
+  },
+  "video": {
+    "processar_a_cada_n_frames": 1,
+    "tempo_real_arquivo": true,
+    "max_fps_envio": 8,
+    "largura_envio": 960,
+    "qualidade_jpeg": 70
+  },
+  "demo": {
+    "pintos": 12,
+    "doentes": 2,
+    "fps": 10,
+    "simular_modelo_comportamento": true,
+    "taxa_falha_deteccao": 0.02,
+    "taxa_rotulo_errado": 0.04,
+    "limites": {
+      "sem_comer_s": 100,
+      "sem_beber_s": 150,
+      "imovel_s": 50
+    }
+  }
+}

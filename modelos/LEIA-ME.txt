@@ -1,0 +1,5 @@
+pinteiro.pt  -> detector YOLO11n treinado para este pinteiro, com 3 classes: pinto, galinha, galo.
+                Caminho configurado em config.json -> modelos.deteccao.
+
+Foi treinado com vídeos de um único pinteiro (câmera de cima). Em outra câmera, luz ou lote,
+a precisão tende a cair e o ideal é retreinar com imagens do local.

@@ -1,0 +1,7 @@
+# Só é necessário para vídeo real (arquivo, webcam ou RTSP).
+# O modo demo roda apenas com a biblioteca padrão do Python.
+ultralytics>=8.3
+opencv-python>=4.9
+lap>=0.5.12
+numpy
+scipy

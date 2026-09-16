@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitoramento do Pinteiro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐣</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <span class="logo" aria-hidden="true">🐣</span>
+      <div>
+        <h1>Monitoramento do Pinteiro</h1>
+        <p id="fonte-desc" class="sutil">Nenhuma fonte ativa</p>
+      </div>
+    </div>
+    <div class="topo-status">
+      <span id="badge-rodando" class="badge">Parado</span>
+      <span id="badge-conexao" class="badge">Conectando…</span>
+    </div>
+  </header>
+
+  <section class="controles cartao" aria-label="Controle da fonte">
+    <label class="campo-rotulo">Fonte
+      <select id="tipo">
+        <option value="demo">Demo (simulada)</option>
+        <option value="arquivo">Arquivo de vídeo</option>
+        <option value="webcam">Webcam</option>
+        <option value="rtsp">Câmera IP (RTSP)</option>
+      </select>
+    </label>
+    <div class="campo" data-tipo="arquivo" hidden>
+      <label class="campo-rotulo">Vídeo
+        <select id="video"></select>
+      </label>
+      <label class="botao secundario">Enviar vídeo…
+        <input type="file" id="upload" accept="video/*,.mkv" hidden>
+      </label>
+      <span id="upload-progresso" class="sutil mono"></span>
+    </div>
+    <div class="campo" data-tipo="webcam" hidden>
+      <label class="campo-rotulo">Índice da câmera
+        <input type="number" id="indice" value="0" min="0" step="1">
+      </label>
+    </div>
+    <div class="campo campo-largo" data-tipo="rtsp" hidden>
+      <label class="campo-rotulo">URL
+        <input type="text" id="url" placeholder="rtsp://usuario:senha@192.168.0.10:554/stream" spellcheck="false">
+      </label>
+    </div>
+    <div class="acoes">
+      <button id="btn-iniciar" class="botao primario">▶ Iniciar</button>
+      <button id="btn-parar" class="botao" disabled>■ Parar</button>
+    </div>
+    <div id="prontidao" class="prontidao"></div>
+    <div id="aviso-controle" class="aviso-controle" role="status"></div>
+  </section>
+
+  <main class="grade">
+    <section class="coluna-principal">
+      <div class="kpis">
+        <div class="kpi destaque"><span class="kpi-valor" data-kpi="detectados">–</span><span class="kpi-nome" id="kpi-classes">Aves detectadas</span></div>
+        <div class="kpi"><span class="kpi-valor" data-kpi="comendo">–</span><span class="kpi-nome"><i class="ponto" style="--c:var(--c-comendo)"></i>Comendo</span></div>
+        <div class="kpi"><span class="kpi-valor" data-kpi="bebendo">–</span><span class="kpi-nome"><i class="ponto" style="--c:var(--c-bebendo)"></i>Bebendo</span></div>
+        <div class="kpi"><span class="kpi-valor" data-kpi="bicando">–</span><span class="kpi-nome"><i class="ponto" style="--c:var(--c-bicando)"></i>Bicando</span></div>
+        <div class="kpi"><span class="kpi-valor" data-kpi="andando">–</span><span class="kpi-nome"><i class="ponto" style="--c:var(--c-andando)"></i>Andando</span></div>
+        <div class="kpi"><span class="kpi-valor" data-kpi="descansando">–</span><span class="kpi-nome"><i class="ponto" style="--c:var(--c-descansando)"></i>Descansando</span></div>
+        <div class="kpi"><span class="kpi-valor" data-kpi="agitado">–</span><span class="kpi-nome"><i class="ponto" style="--c:var(--c-agitado)"></i>Agitados</span></div>
+        <div class="kpi kpi-alerta"><span class="kpi-valor" data-kpi="alertas">–</span><span class="kpi-nome">Alertas ativos</span></div>
+      </div>
+
+      <div id="faixa-alertas" class="faixa-alertas" hidden></div>
+
+      <div class="cartao">
+        <div class="cartao-cab">
+          <h2>Visão ao vivo</h2>
+          <span id="entrada-info" class="sutil mono">—</span>
+        </div>
+        <div id="tela" class="tela">
+          <canvas id="canvas"></canvas>
+          <div id="tela-vazia" class="tela-vazia"><p>Escolha uma fonte e clique em <b>Iniciar</b>.<br>A <b>Demo</b> funciona sem câmera e sem modelo.</p></div>
+        </div>
+        <div class="legenda">
+          <span><i class="ponto" style="--c:var(--c-comendo)"></i>comendo</span>
+          <span><i class="ponto" style="--c:var(--c-bebendo)"></i>bebendo</span>
+          <span><i class="ponto" style="--c:var(--c-bicando)"></i>bicando</span>
+          <span><i class="ponto" style="--c:var(--c-andando)"></i>andando</span>
+          <span><i class="ponto" style="--c:var(--c-descansando)"></i>descansando</span>
+          <span><i class="ponto" style="--c:var(--c-agitado)"></i>agitado</span>
+          <span><i class="tracejado"></i>com alerta</span>
+        </div>
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-cab">
+          <h2>Aves rastreadas</h2>
+          <span id="qtd-pintos" class="sutil"></span>
+        </div>
+        <div class="tabela-rolagem">
+          <table id="tabela">
+            <thead>
+              <tr>
+                <th>Ave</th><th>Estado</th><th>Há</th><th>Sem comer</th><th>Sem beber</th>
+                <th>Distribuição do tempo</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody><tr><td colspan="7" class="vazio">Nenhuma ave rastreada ainda.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside class="cartao painel-log" aria-label="Log">
+      <div class="cartao-cab">
+        <h2>Log</h2>
+        <span id="log-contador" class="sutil"></span>
+      </div>
+      <div class="log-filtros">
+        <label class="chip tipo-sistema"><input type="checkbox" data-filtro="sistema" checked>Sistema</label>
+        <label class="chip tipo-entrada"><input type="checkbox" data-filtro="entrada" checked>Entrada</label>
+        <label class="chip tipo-comportamento"><input type="checkbox" data-filtro="comportamento" checked>Comportamento</label>
+        <label class="chip tipo-alerta"><input type="checkbox" data-filtro="alerta" checked>Alertas</label>
+        <label class="chip"><input type="checkbox" id="filtro-debug">Debug</label>
+      </div>
+      <div class="log-ferramentas">
+        <input type="search" id="busca" placeholder="Buscar no log… (ex.: #4)">
+        <button id="btn-pausar" class="botao pequeno" title="Pausar a rolagem automática">Pausar</button>
+        <button id="btn-limpar" class="botao pequeno" title="Limpa só a tela">Limpar</button>
+        <a class="botao pequeno" href="/api/log.jsonl" download title="Baixa o log em JSONL">Baixar</a>
+      </div>
+      <div class="log-corpo">
+        <ol id="log-lista" class="log-lista ocultar-debug"></ol>
+        <button id="btn-novos" class="btn-novos" hidden>↓ Novos eventos</button>
+      </div>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

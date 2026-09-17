@@ -45,6 +45,10 @@ class Settings:
     # Modelo (pinteiro.pt = YOLO11n treinado em pinto/galinha/galo, absorvido do OlhoNoPinto)
     model: str = _env_str("CV_MODEL", "pinteiro.pt")
     confidence: float = _env_float("CV_CONFIDENCE", 0.35)
+    # Filtro opcional de classe no detector: "galinha" / "pinto" / "galo" ou "" pra desativar.
+    # Quando setado, o YOLO retorna apenas deteccoes dessa classe (economiza CPU no tracker,
+    # namer, ReID e sync). Default vazio = detecta todas as classes do modelo.
+    detect_only_class: str = _env_str("CV_DETECT_ONLY_CLASS", "")
 
     # Contagem (linha virtual)
     line_orientation: str = _env_str("CV_LINE_ORIENTATION", "horizontal")

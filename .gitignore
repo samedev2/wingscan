@@ -35,3 +35,9 @@ Thumbs.db
 *.db-journal
 *.db-wal
 *.db-shm
+# nunca commitar credenciais
+.env
+.env.local
+.env.*.local
+cv-service/.env
+cv-service/.env.local

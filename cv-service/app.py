@@ -668,7 +668,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.height)
     state.cap.set(cv2.CAP_PROP_FPS, settings.fps)
 
-    state.detector = Detector(settings.model, settings.confidence)
+    state.detector = Detector(settings.model, settings.confidence, only_class=settings.detect_only_class or None)
     state.tracker = Tracker()
     state.labels = LabelsStore(settings.labels_path)
     state.reid = ReIDEncoder(

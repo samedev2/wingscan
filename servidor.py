@@ -15,8 +15,9 @@ import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
+from monitor import treino
 from monitor.analise import COMPORTAMENTOS
 from monitor.eventos import Barramento
 from monitor.pipeline import Monitor
@@ -52,6 +53,19 @@ class App:
                 chave: {"caminho": modelos.get(chave), "existe": bool(modelos.get(chave)) and (RAIZ / modelos[chave]).is_file()}
                 for chave in ("deteccao", "comportamento")
             },
+        }
+
+    def treino_resumo(self) -> dict:
+        imagens = treino.listar_imagens(RAIZ)
+        revisados = sum(1 for i in imagens if i["revisado"])
+        return {
+            "classes": treino.CLASSES,
+            "imagens": imagens,
+            "revisados": revisados,
+            "pendentes": len(imagens) - revisados,
+            "videos": sorted(p.name for p in VIDEOS.iterdir() if p.suffix.lower() in EXTENSOES_VIDEO),
+            "job": treino.status_job(),
+            "estatisticas": treino.estatisticas_classes(RAIZ),
         }
 
 
@@ -99,6 +113,7 @@ def criar_handler(app: App):
         # ---- rotas ------------------------------------------------------------
         def do_GET(self):
             rota = urlparse(self.path).path
+            query = parse_qs(urlparse(self.path).query)
             if rota == "/api/info":
                 return self._json(app.info())
             if rota == "/api/eventos":
@@ -111,6 +126,17 @@ def criar_handler(app: App):
                 self.send_header("Content-Length", str(len(corpo)))
                 self.end_headers()
                 return self.wfile.write(corpo)
+            if rota == "/api/treino/resumo":
+                return self._json(app.treino_resumo())
+            if rota == "/api/treino/status":
+                return self._json(treino.status_job())
+            if rota == "/api/treino/imagem":
+                return self._imagem_treino(query.get("nome", [""])[0])
+            if rota == "/api/treino/rotulo":
+                try:
+                    return self._json({"caixas": treino.carregar_rotulos(RAIZ, query.get("nome", [""])[0])})
+                except ValueError as e:
+                    return self._erro(str(e))
             return self._arquivo_estatico(rota)
 
         def do_POST(self):
@@ -123,9 +149,55 @@ def criar_handler(app: App):
                     return self._json({"ok": True})
                 if rota == "/api/upload":
                     return self._upload()
+                if rota == "/api/treino/extrair":
+                    return self._treino_extrair(self._ler_json())
+                if rota == "/api/treino/rotulo":
+                    return self._treino_salvar_rotulo(self._ler_json())
+                if rota == "/api/treino/treinar":
+                    return self._treino_treinar(self._ler_json())
+                if rota == "/api/treino/promover":
+                    return self._treino_promover(self._ler_json())
             except (ValueError, json.JSONDecodeError) as e:
                 return self._erro(str(e))
             return self._erro("Rota não encontrada", HTTPStatus.NOT_FOUND)
+
+        # ---- treino -------------------------------------------------------
+        def _imagem_treino(self, nome: str):
+            alvo = (treino.pasta_imagens(RAIZ) / Path(nome or "").name).resolve()
+            if not alvo.is_relative_to(treino.pasta_imagens(RAIZ)) or not alvo.is_file():
+                return self._erro("Imagem não encontrada", HTTPStatus.NOT_FOUND)
+            corpo = alvo.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(corpo)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(corpo)
+
+        def _treino_extrair(self, pedido: dict):
+            videos = pedido.get("videos") or [p.name for p in VIDEOS.iterdir() if p.suffix.lower() in EXTENSOES_VIDEO]
+            novos = treino.extrair_quadros(RAIZ, videos, intervalo_s=float(pedido.get("intervalo_s", 1.5)),
+                                            limite_por_video=int(pedido.get("limite_por_video", 150)))
+            app.bus.log("sistema", "info", f"{len(novos)} quadros novos extraídos de {len(videos)} vídeo(s)")
+            rotulados = treino.pre_rotular(RAIZ, app.cfg["modelos"], novos)
+            return self._json({"ok": True, "novos": len(novos), "rotulados": rotulados})
+
+        def _treino_salvar_rotulo(self, pedido: dict):
+            treino.salvar_rotulos(RAIZ, pedido.get("nome", ""), pedido.get("caixas", []))
+            return self._json({"ok": True})
+
+        def _treino_treinar(self, pedido: dict):
+            resumo = treino.iniciar_treino(
+                RAIZ, app.cfg["modelos"], app.bus,
+                epocas=int(pedido.get("epocas", 25)), imgsz=int(pedido.get("imgsz", 960)),
+                batch=int(pedido.get("batch", 4)),
+            )
+            return self._json({"ok": True, **resumo})
+
+        def _treino_promover(self, pedido: dict):
+            treino.promover_modelo(RAIZ, pedido.get("pesos", ""))
+            app.bus.log("sistema", "info", f"Modelo em uso atualizado a partir de {pedido.get('pesos')}")
+            return self._json({"ok": True})
 
         def _iniciar(self, pedido: dict):
             tipo = pedido.get("tipo")

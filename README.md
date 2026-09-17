@@ -57,6 +57,65 @@ A linha de checagem abaixo da fonte mostra ✓ ou ✗ para cada requisito. Se fa
 
 **Ajuste as zonas.** Em `config.json`, `zonas.comedouro` e `zonas.bebedouro` são listas de retângulos `[x1, y1, x2, y2]` em coordenadas normalizadas (0 a 1). Eles aparecem tracejados na visão ao vivo: ajuste até cobrirem o comedouro e o bebedouro da sua câmera. As zonas atuais estão ajustadas para o pinteiro usado no treino.
 
+## Retreinar o detector (câmeras novas / alta definição)
+
+O botão **🎯 Treinar detector** no topo do painel abre um fluxo de treino incremental, pensado para
+rodadas leves e repetidas — não um treino único e massivo. A cada rodada o detector parte sempre do
+`modelos/pinteiro.pt` atual (fine-tuning), então algumas dezenas de imagens já ajustam bastante a uma
+câmera, ângulo ou iluminação novos.
+
+1. **Extrair quadros.** Envie um vídeo da câmera nova pelo painel principal (ou copie para `videos/`) e,
+   na tela de treino, escolha o vídeo e clique em **Extrair + pré-rotular**. Isso tira alguns quadros do
+   vídeo (por padrão a cada 1,5 s) e já roda o modelo atual sobre eles — a maioria das caixas já sai
+   correta, você só corrige o que estiver errado.
+2. **Revisar.** Na lista à esquerda, abra cada quadro pendente: arraste para criar uma caixa, arraste os
+   cantos para ajustar, clique numa caixa para selecioná-la, `1`/`2`/`3` trocam a classe (pinto/galinha/
+   galo) e `Delete` remove. **Salvar** marca o quadro como revisado. Repita para pelo menos ~20-30 quadros
+   por rodada — mais que isso na primeira rodada, menos nas seguintes (ative aprendizado ativo: rode o
+   modelo mais recente sobre quadros novos e corrija só o que ele ainda erra).
+3. **Treinar.** Com os quadros revisados, ajuste épocas/tamanho/lote (padrões: 25 épocas, 960 px, lote 4 —
+   pesados o bastante para melhorar, leves o bastante para caber numa CPU) e clique em **Iniciar treino**.
+   Sem GPU, cada rodada leva de alguns minutos a cerca de uma hora, dependendo do número de imagens e
+   épocas. O progresso aparece no painel e no log (`Sistema`).
+4. **Promover.** Ao terminar, o painel mostra precisão/revocação por classe (`modelos/pinteiro_vAAAAMMDD-
+   HHMMSS.pt`, guardado à parte). Se as métricas melhoraram, clique em **Usar este modelo**: o modelo atual
+   vai para `modelos/historico/` e o novo passa a ser `modelos/pinteiro.pt`. Se não melhorou, simplesmente
+   ignore — nada muda até você promover.
+
+Repita o ciclo (extrair → revisar → treinar → promover) em rodadas pequenas até a precisão em câmeras de
+alta definição ficar satisfatória. Isso rende melhor do que uma rodada gigante: cada volta já parte do
+que a anterior aprendeu, e você só gasta tempo revisando o que o modelo ainda não acerta.
+
+### Galinha distante sendo confundida com pinto
+
+Isso é um viés dos dados, não algo que se resolve descrevendo a forma da galinha no código: a rede já
+aprende forma e textura sozinha a partir dos exemplos, mas se toda galinha rotulada estiver grande/perto
+da câmera e todo pinto for uma caixa pequena, o modelo aprende o atalho errado — "caixa pequena = pinto"
+— em vez de olhar pescoço/corpo alongado da galinha. Duas coisas na tela de treino atacam isso direto:
+
+- **"Tamanho das aves revisadas"** (coluna direita): mostra a área média das caixas de cada classe. Se a
+  faixa da galinha não chegar perto da do pinto, ele avisa — sinal de que faltam galinhas distantes
+  rotuladas.
+- **"Ordem: aves menores primeiro"** (lista à esquerda): ordena os quadros pela menor caixa, priorizando
+  justamente as aves pequenas/distantes onde a confusão acontece, em vez de revisar quadros aleatórios.
+
+Revise galinhas nesses quadros até a faixa de tamanho dela se sobrepor à do pinto (mesma ave, vista de
+longe, do tamanho de um pinto — mas rotulada como galinha). O treino também usa um jitter de escala mais
+forte (`scale=0.9`) para reforçar que o tamanho em pixels não é um atributo confiável da classe.
+
+Duas ferramentas a mais ajudam nisso:
+
+- **Zoom no editor** (roda do mouse, duplo clique reseta): a tela mostra o quadro inteiro reduzido, então
+  uma ave pequena/distante vira uns poucos pixels — difícil de ver corcunda, pescoço ou penugem. O zoom
+  faz o recorte na imagem original em alta resolução (o quadro salvo é HD), então dá pra checar de perto
+  antes de rotular.
+- **`monitor/heuristica.py`**: corrige no próprio pipeline (não só no treino) o caso em que o detector
+  classifica como galinha/galo uma ave claramente menor (~4x ou mais) que as aves adultas bem ao lado dela
+  no mesmo quadro — mesma região, logo mesma distância aproximada da câmera, então a diferença de tamanho
+  já não é perspectiva. Isso é geometria pura e só cobre esse caso específico: uma caixa pequena isolada
+  (sem adultos por perto pra comparar) continua ambígua — pode ser pinto ou galinha longe — e só a forma
+  aprendida pelo detector (via exemplos revisados) resolve esse caso.
+
 ## Como funciona
 
 ```
@@ -126,9 +185,14 @@ monitor/
   rastreadores/        configurações do rastreador ajustadas para o cercado
   pipeline.py          laço fonte → detector → análise → eventos
   eventos.py           barramento: histórico, JSONL e distribuição
+  treino.py            extração de quadros, pré-rotulagem, revisão e fine-tuning incremental
+  heuristica.py        correção geométrica: ave pequena perto de adultas no quadro vira pinto
 web/                   painel (HTML, CSS e JS puros)
+  treino.html/.js/.css  tela de revisão de rótulos e treino incremental
 modelos/pinteiro.pt    detector treinado (pinto, galinha, galo)
+modelos/historico/     versões anteriores guardadas ao promover um novo modelo (não versionado)
 videos/                vídeos enviados pelo painel (não versionado)
+treino/dataset/        quadros extraídos, rótulos YOLO e revisado.json (não versionado)
 logs/                  eventos-AAAA-MM-DD.jsonl (não versionado)
 ```
 
@@ -142,3 +206,10 @@ logs/                  eventos-AAAA-MM-DD.jsonl (não versionado)
 | POST | `/api/iniciar` | `{"tipo":"demo"}`, `{"tipo":"arquivo","nome":"x.mp4"}`, `{"tipo":"webcam","indice":0}` ou `{"tipo":"rtsp","url":"rtsp://..."}` |
 | POST | `/api/parar` | para o monitoramento |
 | POST | `/api/upload` | corpo = arquivo de vídeo, header `X-Nome-Arquivo` |
+| GET | `/api/treino/resumo` | quadros do dataset de treino, revisados/pendentes, vídeos disponíveis, status do treino |
+| GET | `/api/treino/imagem?nome=` | serve um quadro extraído |
+| GET/POST | `/api/treino/rotulo?nome=` | lê ou salva as caixas (rótulo) de um quadro |
+| POST | `/api/treino/extrair` | `{"videos":[...], "intervalo_s":1.5, "limite_por_video":150}` — extrai e pré-rotula |
+| POST | `/api/treino/treinar` | `{"epocas":25,"imgsz":960,"batch":4}` — inicia o fine-tuning em segundo plano |
+| GET | `/api/treino/status` | progresso e métricas do treino em andamento ou concluído |
+| POST | `/api/treino/promover` | `{"pesos":"modelos/pinteiro_vAAAAMMDD-HHMMSS.pt"}` — passa a usar esse modelo |

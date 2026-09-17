@@ -6,6 +6,7 @@ from pathlib import Path
 from .analise import Deteccao
 from .eventos import Barramento
 from .fontes import ErroFonte
+from .heuristica import corrigir_por_tamanho
 
 
 class DetectorYOLO:
@@ -68,6 +69,7 @@ class DetectorYOLO:
                     caixa=(float(x1 / w), float(y1 / h), float(x2 / w), float(y2 / h)),
                     conf=round(float(conf), 2), id=tid, classe=classe, rotulo=classe,
                 ))
+            corrigir_por_tamanho(deteccoes)
             if self.modelo_comp is not None:
                 self._classificar_comportamentos(imagem, deteccoes)
         self._limpar_cache()

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Treinamento do detector — Pinteiro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="treino.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <span class="logo" aria-hidden="true">🎯</span>
+      <div>
+        <h1>Treinamento do detector</h1>
+        <p class="sutil">Extrai quadros, corrige rótulos e retreina em cima do modelo atual</p>
+      </div>
+    </div>
+    <a class="botao" href="index.html">← Painel ao vivo</a>
+  </header>
+
+  <main class="grade-treino">
+    <aside class="cartao coluna-lista">
+      <div class="cartao-cab">
+        <h2>Quadros</h2>
+        <span id="t-contador" class="sutil"></span>
+      </div>
+
+      <details class="bloco-extrair" open>
+        <summary>Extrair novos quadros dos vídeos</summary>
+        <div id="t-videos" class="lista-videos sutil">carregando…</div>
+        <div class="linha-campos">
+          <label class="campo-rotulo">A cada
+            <input type="number" id="t-intervalo" value="1.5" min="0.2" step="0.1"> s
+          </label>
+          <label class="campo-rotulo">Máx. por vídeo
+            <input type="number" id="t-limite" value="150" min="1" step="1">
+          </label>
+        </div>
+        <button id="t-btn-extrair" class="botao primario pequeno">Extrair + pré-rotular</button>
+        <p id="t-extrair-status" class="sutil"></p>
+      </details>
+
+      <div class="filtro-lista">
+        <select id="t-filtro">
+          <option value="todos">Todos</option>
+          <option value="pendentes" selected>Pendentes</option>
+          <option value="revisados">Revisados</option>
+        </select>
+        <select id="t-ordenar">
+          <option value="nome">Ordem: nome</option>
+          <option value="pequenas">Ordem: aves menores primeiro</option>
+        </select>
+      </div>
+      <ol id="t-lista" class="lista-quadros"></ol>
+    </aside>
+
+    <section class="cartao coluna-editor">
+      <div class="cartao-cab">
+        <h2>Editor de rótulos</h2>
+        <span class="sutil mono"><span id="t-nome-atual"></span> <span id="t-zoom-info"></span></span>
+      </div>
+      <p class="sutil dica-editor">
+        Clique e arraste para criar uma caixa · arraste os cantos para ajustar · clique numa caixa para selecioná-la ·
+        teclas <b>1</b>/<b>2</b>/<b>3</b> trocam a classe (pinto/galinha/galo) · <b>Delete</b> remove ·
+        roda do mouse para ampliar (essencial em aves pequenas/distantes) · duplo clique reseta o zoom.
+      </p>
+      <p class="sutil dica-editor dica-forma">
+        <b>O que olhar, não só o tamanho</b> (uma galinha longe fica do tamanho de um pinto — só o formato desfaz a dúvida):
+        <b>pinto</b> corpo arredondado, penugem rala e cor fraca/uniforme, ~6x menor que um adulto ao lado;
+        <b>galinha</b> corcunda mais cavada (curva acentuada nas costas), postura mais horizontal;
+        <b>galo</b> pescoço mais alongado e grosso, postura mais ereta ("posturado"), cauda mais alta.
+      </p>
+      <div id="t-vazio" class="tela-vazia">
+        <p>Extraia quadros de um vídeo ou escolha um item na lista à esquerda.</p>
+      </div>
+      <div id="t-editor" class="editor" hidden>
+        <div class="tela-editor">
+          <canvas id="t-canvas"></canvas>
+        </div>
+        <div class="barra-classes">
+          <span class="sutil">Classe da próxima caixa:</span>
+          <button class="chip-classe" data-classe="pinto">1 · pinto</button>
+          <button class="chip-classe" data-classe="galinha">2 · galinha</button>
+          <button class="chip-classe" data-classe="galo">3 · galo</button>
+        </div>
+        <div class="acoes-editor">
+          <button id="t-btn-anterior" class="botao">← Anterior</button>
+          <button id="t-btn-sem-aves" class="botao">Sem aves nesta imagem</button>
+          <button id="t-btn-salvar" class="botao primario">Salvar e revisado ✓</button>
+          <button id="t-btn-proxima" class="botao">Próxima →</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="cartao coluna-treino">
+      <div class="cartao-cab"><h2>Tamanho das aves revisadas</h2></div>
+      <p class="sutil">
+        Área média de cada classe na imagem. Se a faixa da galinha não chegar perto da do pinto, o modelo só viu
+        galinha grande/perto e vai confundir com pinto quando ela estiver longe — revise mais aves distantes
+        (use "aves menores primeiro" na lista) até as faixas se aproximarem.
+      </p>
+      <div id="t-stats" class="stats-tamanho sutil">carregando…</div>
+
+      <div class="cartao-cab"><h2>Treinar</h2></div>
+      <p class="sutil">Fine-tuning leve em cima de <code>modelos/pinteiro.pt</code> — não é um treino do zero. Pede ao menos 20 quadros revisados.</p>
+      <div class="linha-campos">
+        <label class="campo-rotulo">Épocas
+          <input type="number" id="tr-epocas" value="25" min="1" step="1">
+        </label>
+        <label class="campo-rotulo">Tamanho (px)
+          <input type="number" id="tr-imgsz" value="960" min="320" step="32">
+        </label>
+        <label class="campo-rotulo">Lote
+          <input type="number" id="tr-batch" value="4" min="1" step="1">
+        </label>
+      </div>
+      <button id="tr-btn-iniciar" class="botao primario">▶ Iniciar treino</button>
+      <div id="tr-status" class="status-treino"></div>
+      <div id="tr-metricas" class="metricas-treino" hidden></div>
+    </aside>
+  </main>
+
+  <script src="treino.js"></script>
+</body>
+</html>

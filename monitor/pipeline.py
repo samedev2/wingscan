@@ -106,11 +106,13 @@ class Monitor:
             anterior = agora
             frames += 1
 
+            rastreio = None
             if amostra.deteccoes is None:
                 amostra.deteccoes = detector.detectar(amostra.imagem)
                 if identidade:
                     dets = identidade.atualizar(amostra.t, amostra.deteccoes, amostra.largura, amostra.altura)
                     amostra.deteccoes = [d for d in dets if d.id is not None]
+                    rastreio = identidade.resumo(amostra.t)
             inferencia_ms = detector.ultima_inferencia_ms if detector else 0.0
             resumo = analisador.atualizar(amostra.t, amostra.deteccoes)
 
@@ -132,6 +134,7 @@ class Monitor:
                          "classe": d.classe, "rotulo": d.rotulo, "comportamento": d.comportamento}
                         for d in amostra.deteccoes
                     ],
+                    "rastreio": rastreio,
                     **resumo,
                 })
         self.bus.log("sistema", "debug", f"Fonte encerrada após {frames} frames processados")

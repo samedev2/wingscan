@@ -1,0 +1,20 @@
+:root {
+  --classe-pinto: #d08a1d;
+  --classe-galinha: #2f7fd1;
+  --classe-galo: #8a63d2;
+}
+
+.topo a.botao { text-decoration: none; }
+.kpis-rastreio { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+#tabela-rastreio td, #tabela-rastreio th { white-space: nowrap; }
+#tabela-rastreio tr.instavel { background: color-mix(in srgb, var(--vermelho-fundo) 55%, transparent); }
+#tabela-rastreio tr.instavel td:last-child { color: var(--vermelho); font-weight: 700; }
+#tabela-rastreio tr.sumida td { color: var(--sutil); font-style: italic; }
+
+@media (max-width: 1280px) {
+  .kpis-rastreio { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .kpis-rastreio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

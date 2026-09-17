@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rastreamento — Pinteiro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="rastreio.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <span class="logo" aria-hidden="true">🧭</span>
+      <div>
+        <h1>Rastreamento</h1>
+        <p class="sutil">Só identidade/ID — sem comportamento. Valide isto antes de confiar no resto.</p>
+      </div>
+    </div>
+    <div class="topo-status">
+      <span id="badge-rodando" class="badge">Parado</span>
+      <span id="badge-conexao" class="badge">Conectando…</span>
+      <a class="botao pequeno" href="index.html">← Painel ao vivo</a>
+    </div>
+  </header>
+
+  <main class="grade">
+    <section class="coluna-principal">
+      <div class="kpis kpis-rastreio">
+        <div class="kpi destaque"><span class="kpi-valor" id="r-ativos">–</span><span class="kpi-nome">IDs ativos agora</span></div>
+        <div class="kpi"><span class="kpi-valor" id="r-esperado">–</span><span class="kpi-nome">Adultas fixas esperadas (config)</span></div>
+        <div class="kpi"><span class="kpi-valor" id="r-criados">–</span><span class="kpi-nome">Total de IDs já criados</span></div>
+        <div class="kpi kpi-alerta" id="kpi-costuras"><span class="kpi-valor" id="r-costuras">–</span><span class="kpi-nome">Costuras (IDs recuperados)</span></div>
+        <div class="kpi"><span class="kpi-valor" id="r-taxa">–</span><span class="kpi-nome">Costuras / minuto</span></div>
+      </div>
+
+      <p id="r-sem-identidade" class="sutil aviso-controle" hidden>
+        Fonte atual não usa identidade persistente (demo, ou <code>rastreio.identidade_persistente</code> desligado em config.json) — nada pra medir aqui.
+      </p>
+
+      <div class="cartao">
+        <div class="cartao-cab">
+          <h2>Visão de rastreio</h2>
+          <span id="r-info" class="sutil mono">—</span>
+        </div>
+        <div id="tela" class="tela">
+          <canvas id="canvas"></canvas>
+          <div id="tela-vazia" class="tela-vazia"><p>Inicie uma fonte real (arquivo/webcam/RTSP) no painel ao vivo.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="cartao painel-rastreio" aria-label="Aves rastreadas">
+      <div class="cartao-cab">
+        <h2>Aves por estabilidade de ID</h2>
+        <span class="sutil">mais costuras primeiro</span>
+      </div>
+      <div class="tabela-rolagem">
+        <table id="tabela-rastreio">
+          <thead>
+            <tr><th>ID</th><th>Classe</th><th>Criado há</th><th>Visto há</th><th>Costuras</th></tr>
+          </thead>
+          <tbody><tr><td colspan="5" class="vazio">Nenhuma ave rastreada ainda.</td></tr></tbody>
+        </table>
+      </div>
+    </aside>
+  </main>
+
+  <script src="rastreio.js"></script>
+</body>
+</html>

@@ -21,7 +21,7 @@ class IdentidadePersistente:
         self.raio_por_segundo = raio_por_segundo
         self.raio_max = raio_max
         self.populacao = populacao or {}
-        self.aves: dict[int, dict] = {}  # id persistente -> {"classe", "centro", "visto"}
+        self.aves: dict[int, dict] = {}  # id persistente -> {"classe", "centro", "visto", "criado", "costuras"}
         self.mapa: dict[int, int] = {}   # id do rastreador -> id persistente
         self.proximo = 1
         self.costuras = 0
@@ -59,9 +59,11 @@ class IdentidadePersistente:
                         custo[a, b] = dist
             for a, b in zip(*linear_sum_assignment(custo)):
                 if custo[a, b] < 1e6:
-                    atribuido[novas[a]] = perdidas[b]
-                    vistas.add(perdidas[b])
+                    pid = perdidas[b]
+                    atribuido[novas[a]] = pid
+                    vistas.add(pid)
                     self.costuras += 1
+                    self.aves[pid]["costuras"] += 1
             novas = [k for k in novas if k not in atribuido]
 
         for k in novas:
@@ -77,10 +79,11 @@ class IdentidadePersistente:
                 # população fechada: é uma ave que já existe, mesmo longe
                 pid = min(sobrando, key=lambda p: np.linalg.norm(c - self.aves[p]["centro"]))
                 self.costuras += 1
+                self.aves[pid]["costuras"] += 1
             else:
                 pid = self.proximo
                 self.proximo += 1
-                self.aves[pid] = {"classe": d.classe}
+                self.aves[pid] = {"classe": d.classe, "criado": t, "costuras": 0}
             atribuido[k] = pid
             vistas.add(pid)
 
@@ -90,6 +93,21 @@ class IdentidadePersistente:
             self.aves[pid].update(centro=c, visto=t)
             d.id = pid
         return deteccoes
+
+    def resumo(self, t: float) -> dict:
+        """Estado do rastreamento em si — sem nada de comportamento — pra validar a identidade
+        persistente antes de confiar no que vem depois dela na cadeia (análise de comportamento)."""
+        return {
+            "total_ids_criados": self.proximo - 1,
+            "ids_ativos": len(self.aves),
+            "costuras_totais": self.costuras,
+            "populacao_esperada": sum(self.populacao.values()) if self.populacao else None,
+            "aves": [
+                {"id": pid, "classe": a["classe"], "criado_ha_s": round(t - a["criado"], 1),
+                 "visto_ha_s": round(t - a["visto"], 1) if "visto" in a else None, "costuras": a["costuras"]}
+                for pid, a in self.aves.items()
+            ],
+        }
 
     def _sem_duplicatas(self, deteccoes):
         """Duas caixas da mesma classe com uma quase toda dentro da outra são a mesma ave

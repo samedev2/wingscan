@@ -42,7 +42,7 @@ from labels import LabelsStore
 from namer import TrackNamer
 from panel.db import Database
 from panel.repo import PanelRepo
-from reid import ReIDEncoder
+from reid import ReIDEncoder, ReIDDatabase, ReIDMatcher
 from sensors.environment import SimulatedEnvironmentSensor
 from size_classifier import SizeClassifier
 from storage import Storage
@@ -57,6 +57,8 @@ class AppState:
     detector: Detector | None = None
     tracker: Tracker | None = None
     reid: ReIDEncoder | None = None
+    reid_matcher: ReIDMatcher | None = None
+    reid_db: ReIDDatabase | None = None
     labels: LabelsStore | None = None
     classifier: EmbeddingClassifier | None = None
     namer: TrackNamer | None = None
@@ -71,6 +73,7 @@ class AppState:
     behavior: BehaviorAnalyzer | None = None
     sensor: SimulatedEnvironmentSensor | None = None
     running: bool = False
+    paused: bool = False
     # contagem acumulada entre loops do vídeo (persiste enquanto o serviço roda)
     lifetime_contagens: dict = {}
     loop_count: int = 0
@@ -178,6 +181,9 @@ async def _process_loop() -> None:
     label_annotator = sv.LabelAnnotator()
 
     while state.running:
+        if state.paused:
+            await asyncio.sleep(0.2)
+            continue
         if state.cap is None or not state.cap.isOpened():
             await asyncio.sleep(0.1)
             continue
@@ -671,11 +677,38 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state.classifier = EmbeddingClassifier(
         state.labels, threshold=settings.reid_threshold
     )
+    # ReID v2 com SQLite (identidades persistentes, cross-camera, cross-session)
+    # Default OFF: usa labels.json legacy. Liga com CV_REID_SQLITE=1.
+    # IMPORTANTE: criado ANTES do namer para que o matcher seja passado na init.
+    if settings.reid_sqlite_enabled:
+        try:
+            from pathlib import Path
+            db_path = Path(settings.db_path)
+            if not db_path.is_absolute():
+                db_path = (Path(state.storage.turno_dir).parent if hasattr(state.storage, "turno_dir") else Path.cwd()) / db_path
+            state.reid_db = ReIDDatabase(db_path)
+            state.reid_matcher = ReIDMatcher(
+                state.reid_db,
+                threshold=settings.reid_sqlite_threshold,
+                recent_window_s=settings.reid_sqlite_recent_window_s,
+                device=None if settings.reid_device == "auto" else settings.reid_device,
+            )
+            print(f"[startup] ReID SQLite ATIVO  threshold={settings.reid_sqlite_threshold}  cached={len(state.reid_matcher._cache)} identities")
+        except Exception as e:
+            print(f"[startup] ReID SQLite falhou: {e}  -> fallback labels.json")
+            state.reid_matcher = None
+            state.reid_db = None
+    else:
+        print("[startup] ReID SQLite OFF (V1 labels.json ativo)")
+        state.reid_matcher = None
+        state.reid_db = None
+
     state.namer = TrackNamer(
         reid=state.reid,
         classifier=state.classifier,
         labels=state.labels,
         on_new_item=_on_new_item,
+        sqlite_matcher=state.reid_matcher,
     )
     state.counter = Counter(
         line_orientation=settings.line_orientation,
@@ -811,6 +844,88 @@ async def api_identified():
         "galinhas": by_type.get("galinha", 0),
         "galos": by_type.get("galo", 0),
         "birds": birds,
+    })
+
+
+@app.get("/api/identities")
+async def api_identities(type_filter: str | None = Query(default=None, alias="type")):
+    """Identidades persistentes (ReID SQLite). Cada linha e UMA galinha unica atraves do tempo/cameras."""
+    if state.reid_db is None:
+        return JSONResponse({
+            "enabled": False,
+            "message": "ReID SQLite nao ativo. Ligue com CV_REID_SQLITE=1",
+            "identities": [],
+        })
+    identities = state.reid_db.list_active(type_filter=type_filter)
+    return JSONResponse({
+        "enabled": True,
+        "threshold": state.reid_matcher.threshold if state.reid_matcher else None,
+        "count": len(identities),
+        "identities": identities,
+    })
+
+
+@app.get("/api/identity/{identity_id}/thumbnail")
+async def api_identity_thumbnail(identity_id: int):
+    """Thumbnail 96x96 armazenado no SQLite (espelha data.thumbnail BLOB)."""
+    if state.reid_db is None:
+        return Response(status_code=503, content=b"ReID SQLite nao ativo")
+    thumb = state.reid_db.get_thumbnail(identity_id)
+    if not thumb:
+        return Response(status_code=404, content=b"sem thumbnail")
+    return Response(content=thumb, media_type="image/jpeg")
+
+
+@app.get("/api/identity/{identity_id}/capture")
+async def api_identity_capture(identity_id: int, index: int = Query(default=-1, ge=-100, le=100)):
+    """Crop full-res atual (ou index especifico) de uma galinha especifica.
+
+    index=-1 (default) = captura mais recente.
+    Use GET /api/identity/{id}/captures pra ver o historico disponivel.
+    """
+    if state.reid_matcher is None:
+        return Response(status_code=503, content=b"ReID SQLite nao ativo")
+    cap = state.reid_matcher.get_capture(identity_id, index)
+    if cap is None:
+        return Response(status_code=404, content=b"sem captura (ainda nao vista)")
+    return Response(content=cap["jpeg"], media_type="image/jpeg",
+                    headers={"X-Capture-Ts": str(cap["ts"])})
+
+
+@app.get("/api/identity/{identity_id}/captures")
+async def api_identity_captures(identity_id: int):
+    """Lista capturas em cache (sem os bytes JPEG) pra galeria.
+
+    Use /api/identity/{id}/capture?index=N pra pegar a N-esima captura.
+    """
+    if state.reid_matcher is None:
+        return JSONResponse({"enabled": False, "captures": []})
+    caps = state.reid_matcher.list_captures(identity_id)
+    return JSONResponse({
+        "enabled": True,
+        "identity_id": identity_id,
+        "count": len(caps),
+        "captures": caps,
+    })
+
+
+@app.get("/api/reid/info")
+async def api_reid_info():
+    """Status do ReID v2 (SQLite) e do v1 (labels.json)."""
+    legacy_v1_count = 0
+    if state.labels is not None and hasattr(state.labels, "data"):
+        try:
+            legacy_v1_count = len(state.labels.data)
+        except Exception:
+            pass
+    return JSONResponse({
+        "sqlite_enabled": settings.reid_sqlite_enabled,
+        "sqlite_threshold": settings.reid_sqlite_threshold,
+        "recent_window_s": settings.reid_sqlite_recent_window_s,
+        "matcher_loaded": state.reid_matcher is not None,
+        "cached_identities": len(state.reid_matcher._cache) if state.reid_matcher else 0,
+        "legacy_v1_labels_loaded": legacy_v1_count > 0,
+        "legacy_v1_label_count": legacy_v1_count,
     })
 
 
@@ -1277,6 +1392,91 @@ async def api_source_webcam():
     return JSONResponse({
         "ok": True,
         "source": {"video_path": None, "camera_index": idx}
+    })
+
+
+@app.get("/api/source/list")
+async def api_source_list():
+    """Lista arquivos em data/uploads/ para popular o seletor de vídeo."""
+    files: list[dict] = []
+    try:
+        for entry in sorted(_os.listdir(UPLOAD_DIR), reverse=True):
+            full = _os.path.join(UPLOAD_DIR, entry)
+            if not _os.path.isfile(full):
+                continue
+            ext = _os.path.splitext(entry)[1].lower()
+            if ext not in ALLOWED_EXT:
+                continue
+            try:
+                size = _os.path.getsize(full)
+                mtime = int(_os.path.getmtime(full))
+            except Exception:
+                continue
+            files.append({
+                "path": full,
+                "name": entry,
+                "size_bytes": size,
+                "size_mb": round(size / (1024 * 1024), 1),
+                "modified_ts": mtime,
+            })
+    except Exception as e:
+        return JSONResponse({"error": f"falha listando uploads: {e}"}, status_code=500)
+    return JSONResponse({
+        "upload_dir": UPLOAD_DIR,
+        "count": len(files),
+        "files": files,
+    })
+
+
+@app.post("/api/source/path")
+async def api_source_path(request: Request):
+    """Troca o source para um arquivo ja existente em data/uploads/.
+    Body: {path: "<caminho absoluto>"}
+    Usado pelo seletor de vídeos do front-end (sem re-upload).
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "body precisa ser JSON"}, status_code=400)
+    new_path = (body.get("path") or "").strip()
+    if not new_path:
+        return JSONResponse({"error": "campo 'path' obrigatório"}, status_code=400)
+    # aceita apenas caminhos dentro de UPLOAD_DIR (anti-path-traversal)
+    real_upload = _os.path.realpath(UPLOAD_DIR)
+    real_path = _os.path.realpath(new_path)
+    if not real_path.startswith(real_upload + _os.sep) and real_path != real_upload:
+        return JSONResponse(
+            {"error": "path deve estar dentro de data/uploads/"},
+            status_code=400,
+        )
+    try:
+        info = await _swap_source_to(real_path)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    print(f"[source] path trocado: {real_path}  fps={info['fps']}  {info['width']}x{info['height']}")
+    return JSONResponse({"ok": True, "source": info})
+
+
+# ===== Process loop start / stop =====
+@app.post("/api/process/start")
+async def api_process_start():
+    """Inicia (ou retoma) o loop de processamento."""
+    state.paused = False
+    return JSONResponse({"ok": True, "paused": False})
+
+
+@app.post("/api/process/stop")
+async def api_process_stop():
+    """Pausa o loop de processamento (mantem camera aberta, so nao processa)."""
+    state.paused = True
+    return JSONResponse({"ok": True, "paused": True})
+
+
+@app.get("/api/process/status")
+async def api_process_status():
+    return JSONResponse({
+        "running": state.running,
+        "paused": state.paused,
     })
 
 

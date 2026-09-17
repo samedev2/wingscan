@@ -24,11 +24,13 @@ class TrackNamer:
         classifier: EmbeddingClassifier,
         labels: LabelsStore,
         on_new_item=None,
+        sqlite_matcher=None,
     ):
         self.reid = reid
         self.classifier = classifier
         self.labels = labels
         self.on_new_item = on_new_item  # callback opcional
+        self.sqlite_matcher = sqlite_matcher  # se setado, bypassa classifier (ReID SQLite ativo)
         self._cache: dict[int, str] = {}
         self._counter: int = 0
 
@@ -100,21 +102,42 @@ class TrackNamer:
                 continue
 
             bbox = tuple(tracks.xyxy[i].tolist())
-            embedding = self.reid.encode(frame, bbox)
-            cls_name, sim = self.classifier.classify(embedding)
+            classe = (detector_classes[i] or "item").lower()
+            sim = 0.0
 
-            if cls_name is None:
-                # Item novo: usa a classe do detector como prefixo
-                classe = (detector_classes[i] or "item").lower()
-                cls_name = self._next_named_item_name(classe)
-                self.labels.add_embedding(cls_name, embedding)
-                if self.on_new_item is not None:
-                    try:
-                        self.on_new_item(
-                            tid, cls_name, sim, frame, bbox, embedding
-                        )
-                    except Exception as e:
-                        print(f"[namer] on_new_item callback falhou: {e}")
+            if self.sqlite_matcher is not None:
+                # ReID SQLite ativo: usa matcher (ignora V1 labels.json)
+                embedding = self.reid.encode(frame, bbox)
+                match = self.sqlite_matcher.find_match(embedding, type_filter=classe)
+                if match is not None:
+                    cls_name = match["name"]
+                    sim = float(match.get("score", 0.0))
+                    self.sqlite_matcher.update_seen(match["id"], track_id=tid)
+                    # captura individual full-res em cache rotativo
+                    self.sqlite_matcher.save_capture(int(match["id"]), frame, bbox)
+                else:
+                    # Nova identidade: registra embedding + thumbnail no SQLite
+                    cls_name = self.sqlite_matcher.next_name(classe)
+                    new = self.sqlite_matcher.register(frame, bbox, embedding, classe, camera_id=None)
+                    # captura inicial
+                    if new and "id" in new:
+                        self.sqlite_matcher.save_capture(int(new["id"]), frame, bbox)
+                    sim = 1.0  # primeira aparicao = certeza
+            else:
+                # V1 legacy: usa EmbeddingClassifier + labels.json
+                embedding = self.reid.encode(frame, bbox)
+                cls_name, sim = self.classifier.classify(embedding)
+                if cls_name is None:
+                    # Item novo: usa a classe do detector como prefixo
+                    cls_name = self._next_named_item_name(classe)
+                    self.labels.add_embedding(cls_name, embedding)
+
+            if self.on_new_item is not None and sim >= 1.0:
+                # so dispara callback em primeira aparicao (sim==1.0 significa nova identidade)
+                try:
+                    self.on_new_item(tid, cls_name, sim, frame, bbox, embedding)
+                except Exception as e:
+                    print(f"[namer] on_new_item callback falhou: {e}")
 
             self._cache[tid] = cls_name
             names.append(cls_name)

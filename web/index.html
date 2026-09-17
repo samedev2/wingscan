@@ -8,40 +8,183 @@
   </head>
   <body>
     <main class="app-layout">
-      <section class="left-pane">
-        <div class="video-wrap" id="video-wrap">
-          <img id="mjpeg" alt="stream MJPEG" />
-          <canvas id="heatmap-canvas" class="overlay-canvas"></canvas>
-          <canvas id="paths-canvas" class="overlay-canvas"></canvas>
-          <canvas id="overlay" width="1280" height="720"></canvas>
-          <div id="new-item-banner" class="new-item-banner"></div>
+      <!-- ============================== HEADER ============================== -->
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          <h1>Wingscam</h1>
+          <span class="brand-sub">monitoramento de galinheiro</span>
         </div>
 
-        <div class="player-bar">
-          <div class="player-time">
-            <span class="kbd">A/D</span> pan &nbsp;
-            <span class="kbd">W/S</span> zoom &nbsp;
-            <span class="kbd">↑/↓</span> tilt &nbsp;
-            <span class="kbd">R</span> boost &nbsp;
-            <span class="kbd">0</span> reset &nbsp;
-            <span class="kbd">drag</span> pan &nbsp;
-            <span class="kbd">scroll</span> zoom &nbsp;
-            <span class="kbd">click bbox</span> nomear
-            <button id="btn-source" class="btn-source" title="Trocar fonte de vídeo">📁 Trocar fonte</button>
-          </div>
-          <div class="status" id="status">
-            <span class="dot" id="conn-dot"></span>
-            <span id="conn-text">conectando…</span>
-          </div>
+        <div class="conn" id="conn-status">
+          <span class="dot" id="conn-dot"></span>
+          <span id="conn-text">conectando…</span>
+        </div>
+
+        <div class="pills" id="status-pills">
+          <span class="pill" data-id="opencv">OpenCV</span>
+          <span class="pill" data-id="yolo">Ultralytics YOLO</span>
+          <span class="pill" data-id="model">pinteiro.pt</span>
+          <span class="pill" data-id="reid">ReID SQLite</span>
+          <span class="pill" data-id="behavior">Comportamento (zonas)</span>
+        </div>
+      </header>
+
+      <!-- ============================== CONTROLS ============================== -->
+      <section class="controls">
+        <div class="control-group" id="group-fonte">
+          <label>Fonte</label>
+          <select id="source-select">
+            <option value="upload">Arquivo de vídeo</option>
+            <option value="webcam">Webcam</option>
+            <option value="url">URL RTSP/HTTP</option>
+          </select>
+        </div>
+
+        <div class="control-group" id="group-video">
+          <label>Vídeo</label>
+          <select id="video-select">
+            <option>— escolha um vídeo —</option>
+          </select>
+        </div>
+
+        <div class="control-buttons">
+          <label class="upload-btn">
+            <input type="file" id="file-input" accept="video/*" hidden />
+            <span id="btn-send-video">📤 Enviar vídeo…</span>
+          </label>
+
+          <button class="btn btn-primary" id="btn-start" title="Iniciar processamento">▶ Iniciar</button>
+          <button class="btn btn-ghost"   id="btn-stop"  title="Parar processamento">⏹ Parar</button>
+          <button class="btn btn-ghost"   id="btn-source" title="Trocar fonte">📁 Fonte</button>
+        </div>
+
+        <div class="upload-status" id="upload-status" hidden>
+          <span class="dot dot-ok"></span>
+          <span id="upload-status-text">enviado</span>
         </div>
       </section>
 
-      <aside class="right-pane">
-        <div id="analytics" class="analytics"></div>
+      <!-- ============================ STAT CARDS ============================ -->
+      <section class="stats">
+        <article class="stat" data-key="total">
+          <div class="stat-num" id="stat-total">0</div>
+          <div class="stat-label">Aves</div>
+          <div class="stat-sub" id="stat-total-sub">—</div>
+          <span class="stat-dot" style="background:#58a6ff"></span>
+        </article>
+        <article class="stat" data-key="comendo">
+          <div class="stat-num" id="stat-comendo">0</div>
+          <div class="stat-label">Comendo</div>
+          <div class="stat-sub" id="stat-comendo-sub">—</div>
+          <span class="stat-dot" style="background:#3fb950"></span>
+        </article>
+        <article class="stat" data-key="bebendo">
+          <div class="stat-num" id="stat-bebendo">0</div>
+          <div class="stat-label">Bebendo</div>
+          <div class="stat-sub" id="stat-bebendo-sub">—</div>
+          <span class="stat-dot" style="background:#58a6ff"></span>
+        </article>
+        <article class="stat" data-key="bicando">
+          <div class="stat-num" id="stat-bicando">0</div>
+          <div class="stat-label">Bicando</div>
+          <div class="stat-sub" id="stat-bicando-sub">—</div>
+          <span class="stat-dot" style="background:#a371f7"></span>
+        </article>
+        <article class="stat" data-key="andando">
+          <div class="stat-num" id="stat-andando">0</div>
+          <div class="stat-label">Andando</div>
+          <div class="stat-sub" id="stat-andando-sub">—</div>
+          <span class="stat-dot" style="background:#f0883e"></span>
+        </article>
+        <article class="stat" data-key="descansando">
+          <div class="stat-num" id="stat-descansando">0</div>
+          <div class="stat-label">Descansando</div>
+          <div class="stat-sub" id="stat-descansando-sub">—</div>
+          <span class="stat-dot" style="background:#8b949e"></span>
+        </article>
+        <article class="stat" data-key="agitados">
+          <div class="stat-num" id="stat-agitados">0</div>
+          <div class="stat-label">Agitados</div>
+          <div class="stat-sub" id="stat-agitados-sub">—</div>
+          <span class="stat-dot" style="background:#f85149"></span>
+        </article>
+        <article class="stat" data-key="alertas">
+          <div class="stat-num" id="stat-alertas">0</div>
+          <div class="stat-label">Alertas ativos</div>
+          <div class="stat-sub" id="stat-alertas-sub">—</div>
+          <span class="stat-dot" style="background:#d29922"></span>
+        </article>
+      </section>
+
+      <!-- ============================ MAIN GRID ============================ -->
+      <section class="main-grid">
+        <!-- Video -->
+        <div class="video-card">
+          <header class="card-h">
+            <h2>Visão ao vivo</h2>
+            <span class="muted small" id="frame-meta">frame 0 · t 00:00 · 0 fps</span>
+          </header>
+          <div class="video-wrap" id="video-wrap">
+            <img id="mjpeg" alt="stream MJPEG" />
+            <canvas id="heatmap-canvas" class="overlay-canvas"></canvas>
+            <canvas id="paths-canvas" class="overlay-canvas"></canvas>
+            <canvas id="overlay" width="1280" height="720"></canvas>
+            <div id="new-item-banner" class="new-item-banner"></div>
+          </div>
+          <div class="player-bar">
+            <span class="kbd">A/D</span> pan <span class="kbd">W/S</span> zoom
+            <span class="kbd">R</span> boost <span class="kbd">0</span> reset
+            <span class="kbd">drag</span> pan <span class="kbd">scroll</span> zoom
+          </div>
+        </div>
+
+        <!-- Log / Eventos -->
+        <div class="log-card">
+          <header class="card-h">
+            <h2>Log</h2>
+            <span class="muted small" id="log-count">0 eventos</span>
+            <button class="btn btn-ghost btn-sm" id="btn-log-toggle">Pausar</button>
+            <button class="btn btn-ghost btn-sm" id="btn-log-clear">Limpar</button>
+            <button class="btn btn-ghost btn-sm" id="btn-log-download">Baixar</button>
+          </header>
+
+          <div class="log-filters" id="log-filters">
+            <button class="chip active" data-filter="sistema">Sistema</button>
+            <button class="chip active" data-filter="entrada">Entrada</button>
+            <button class="chip"        data-filter="comportamento">Comportamento</button>
+            <button class="chip"        data-filter="alertas">Alertas</button>
+            <button class="chip"        data-filter="debug">Debug</button>
+          </div>
+
+          <div class="log-search">
+            <input type="search" id="log-search" placeholder="Buscar no log… (ex: #4)" />
+          </div>
+
+          <ul class="log-list" id="events"></ul>
+        </div>
+      </section>
+
+      <!-- ============================ ADVA NCED PANELS ============================ -->
+      <section class="advanced">
+        <details class="adv-panel" open>
+          <summary>Painel de Sistema</summary>
+          <div id="system-panel" class="system-panel"></div>
+        </details>
 
         <details class="adv-panel">
-          <summary>Painel de Sistema (avançado)</summary>
-          <div id="system-panel" class="system-panel"></div>
+          <summary>Identidades persistentes (ReID)</summary>
+          <div class="reid-info">
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-identities">↻ Atualizar</button>
+            <select id="identity-filter">
+              <option value="">todas</option>
+              <option value="pinto">pintos</option>
+              <option value="galinha">galinhas</option>
+              <option value="galo">galos</option>
+            </select>
+            <span class="muted small" id="identities-count">0 identidades</span>
+          </div>
+          <div id="identities-gallery" class="identities-gallery"></div>
         </details>
 
         <details class="adv-panel">
@@ -89,10 +232,10 @@
         </details>
 
         <details class="adv-panel">
-          <summary>Eventos recentes</summary>
-          <ul id="events" class="events"></ul>
+          <summary>Analytics (timeline + métricas)</summary>
+          <div id="analytics" class="analytics"></div>
         </details>
-      </aside>
+      </section>
     </main>
 
     <script type="module" src="/src/main.ts"></script>

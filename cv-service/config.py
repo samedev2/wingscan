@@ -59,6 +59,11 @@ class Settings:
     reid_device: str = _env_str("CV_REID_DEVICE", "auto")
     labels_path: str = _env_str("CV_LABELS_PATH", "data/labels.json")
 
+    # ReID v2 com SQLite (identidades persistentes, cross-camera, cross-session)
+    reid_sqlite_enabled: bool = _env_str("CV_REID_SQLITE", "0") not in ("0", "false", "")
+    reid_sqlite_threshold: float = _env_float("CV_REID_SQLITE_THRESHOLD", 0.85)
+    reid_sqlite_recent_window_s: float = _env_float("CV_REID_RECENT_WINDOW", 5.0)
+
     # Painel v3 — SQLite + tracking
     db_path: str = _env_str("CV_DB_PATH", "data/controle.db")
     heatmap_enabled: bool = _env_str("CV_HEATMAP", "1") not in ("0", "false", "")

@@ -157,6 +157,8 @@ def criar_handler(app: App):
                     return self._treino_treinar(self._ler_json())
                 if rota == "/api/treino/promover":
                     return self._treino_promover(self._ler_json())
+                if rota == "/api/treino/confirmar":
+                    return self._treino_confirmar(self._ler_json())
             except (ValueError, json.JSONDecodeError) as e:
                 return self._erro(str(e))
             return self._erro("Rota não encontrada", HTTPStatus.NOT_FOUND)
@@ -198,6 +200,11 @@ def criar_handler(app: App):
             treino.promover_modelo(RAIZ, pedido.get("pesos", ""))
             app.bus.log("sistema", "info", f"Modelo em uso atualizado a partir de {pedido.get('pesos')}")
             return self._json({"ok": True})
+
+        def _treino_confirmar(self, pedido: dict):
+            nome = treino.salvar_confirmacao_ao_vivo(RAIZ, pedido.get("imagem", ""), pedido.get("caixa", {}),
+                                                      pedido.get("classe", ""))
+            return self._json({"ok": True, "nome": nome})
 
         def _iniciar(self, pedido: dict):
             tipo = pedido.get("tipo")

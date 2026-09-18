@@ -21,6 +21,10 @@
   --c-descansando: #8792a0;
   --c-agitado: #e0592a;
 
+  --classe-pinto: #d08a1d;
+  --classe-galinha: #2f7fd1;
+  --classe-galo: #8a63d2;
+
   --raio: 10px;
   --mono: ui-monospace, "Cascadia Mono", "Consolas", monospace;
   color-scheme: light;
@@ -296,6 +300,31 @@ select:focus-visible, input:focus-visible, .botao:focus-visible {
   font-size: 12px;
   color: var(--sutil);
 }
+.legenda-sep { color: var(--borda); }
+
+.chip-toggle { margin-right: auto; }
+.chip-toggle input { accent-color: var(--primaria); }
+
+.revisao-dica { margin: 0 14px 8px; font-size: 12px; }
+.revisao-dica[hidden] { display: none; }
+#revisao-contador { font-weight: 650; color: var(--texto); }
+
+.tela canvas.clicavel { cursor: pointer; }
+.revisao-flash {
+  position: absolute;
+  top: 10px; right: 10px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: #fff;
+  background: var(--verde);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+  animation: revisao-surgir .15s ease-out;
+}
+.revisao-flash.erro { background: var(--vermelho); }
+.revisao-flash[hidden] { display: none; }
+@keyframes revisao-surgir { from { opacity: 0; transform: translateY(-4px); } }
 
 /* ---- tabela --------------------------------------------------------------------- */
 .tabela-rolagem { overflow-x: auto; padding: 0 6px 8px; }

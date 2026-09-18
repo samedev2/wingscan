@@ -57,6 +57,7 @@ function atualizarKpis(rastreio) {
   $("#r-sem-identidade").hidden = !app.status.rodando || !semIdentidade;
   if (semIdentidade) {
     for (const id of ["r-ativos", "r-esperado", "r-criados", "r-costuras", "r-taxa"]) $(`#${id}`).textContent = "–";
+    $("#r-pico").textContent = "";
     return;
   }
   $("#r-ativos").textContent = rastreio.ids_ativos;
@@ -68,6 +69,11 @@ function atualizarKpis(rastreio) {
   const desde = app.status.desde ? new Date(app.status.desde) : null;
   const minutos = desde ? Math.max((Date.now() - desde.getTime()) / 60000, 1 / 60) : null;
   $("#r-taxa").textContent = minutos ? (rastreio.costuras_totais / minutos).toFixed(1) : "–";
+
+  const picos = Object.entries(rastreio.pico_por_classe || {}).map(([c, n]) => `${c}: ${n}`);
+  $("#r-pico").textContent = picos.length
+    ? `Teto aprendido por classe (maior nº visto ao mesmo tempo — a partir dele, ID novo tenta religar numa ave sumida): ${picos.join(" · ")}`
+    : "";
 }
 
 function renderizarTabela(rastreio) {

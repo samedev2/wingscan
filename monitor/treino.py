@@ -13,6 +13,7 @@ Cada rodada deve ser pequena (dezenas a poucas centenas de quadros): como parte 
 modelo já treinado, isso já ajusta bem à câmera/luz nova sem precisar de milhares de imagens.
 """
 
+import base64
 import json
 import random
 import shutil
@@ -232,6 +233,34 @@ def salvar_rotulos(raiz: Path, nome: str, caixas: list[dict]):
     revisados = _carregar_revisados(raiz)
     revisados.add(nome)
     _salvar_revisados(raiz, revisados)
+
+
+def salvar_confirmacao_ao_vivo(raiz: Path, imagem_b64: str, caixa: dict, classe: str) -> str:
+    """Confirmação/correção feita direto na Visão ao vivo: clique confirma a classe que já
+    estava na moldura, tecla 1/2/3 corrige — cada uma vira, na hora, um quadro revisado.
+
+    Só grava a caixa confirmada (não as outras aves do mesmo quadro): é rápido para revisar
+    em massa vendo o vídeo passar, mas o quadro fica com rótulo parcial até alguém revisar as
+    outras aves na tela de treino — normal para esse fluxo, não é um bug.
+    """
+    if classe not in CLASSES:
+        raise ValueError("Classe inválida")
+    pasta_imgs = pasta_imagens(raiz)
+    pasta_imgs.mkdir(parents=True, exist_ok=True)
+    nome = f"ao_vivo_{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.jpg"
+    (pasta_imgs / nome).write_bytes(base64.b64decode(imagem_b64))
+
+    idx = CLASSES.index(classe)
+    x1, y1, x2, y2 = caixa["x1"], caixa["y1"], caixa["x2"], caixa["y2"]
+    cx, cy, w, h = (x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1
+    lbl = _pasta_labels(raiz) / f"{Path(nome).stem}.txt"
+    lbl.parent.mkdir(parents=True, exist_ok=True)
+    lbl.write_text(f"{idx} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}", encoding="utf-8")
+
+    revisados = _carregar_revisados(raiz)
+    revisados.add(nome)
+    _salvar_revisados(raiz, revisados)
+    return nome
 
 
 # ---- 4. preparação do dataset e treino -------------------------------------

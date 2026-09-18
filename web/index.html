@@ -78,13 +78,23 @@
       <div class="cartao">
         <div class="cartao-cab">
           <h2>Visão ao vivo</h2>
+          <label class="chip chip-toggle"><input type="checkbox" id="filtro-comportamento" checked>Mostrar comportamento</label>
+          <label class="chip chip-toggle"><input type="checkbox" id="revisao-ao-vivo">Revisar ao vivo</label>
           <span id="entrada-info" class="sutil mono">—</span>
         </div>
+        <p id="revisao-dica" class="sutil revisao-dica" hidden>
+          Clique numa moldura pra confirmar a classe · <b>1</b>=pinto <b>2</b>=galinha <b>3</b>=galo em cima do mouse pra corrigir · <span id="revisao-contador">0 confirmadas</span>
+        </p>
         <div id="tela" class="tela">
           <canvas id="canvas"></canvas>
           <div id="tela-vazia" class="tela-vazia"><p>Escolha uma fonte e clique em <b>Iniciar</b>.<br>A <b>Demo</b> funciona sem câmera e sem modelo.</p></div>
+          <div id="revisao-flash" class="revisao-flash" hidden></div>
         </div>
         <div class="legenda">
+          <span><i class="ponto" style="--c:var(--classe-pinto)"></i>pinto</span>
+          <span><i class="ponto" style="--c:var(--classe-galinha)"></i>galinha</span>
+          <span><i class="ponto" style="--c:var(--classe-galo)"></i>galo</span>
+          <span class="legenda-sep">·</span>
           <span><i class="ponto" style="--c:var(--c-comendo)"></i>comendo</span>
           <span><i class="ponto" style="--c:var(--c-bebendo)"></i>bebendo</span>
           <span><i class="ponto" style="--c:var(--c-bicando)"></i>bicando</span>

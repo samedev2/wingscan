@@ -21,6 +21,10 @@ class IdentidadePersistente:
         self.raio_por_segundo = raio_por_segundo
         self.raio_max = raio_max
         self.populacao = populacao or {}
+        # teto por classe: começa no valor configurado (se houver) e cresce sozinho até o maior
+        # número de aves vistas ao mesmo tempo — a partir daí, ID novo tenta religar numa ave
+        # sumida antes de nascer, mesmo pra classes sem população fixa (ex.: pinto, que varia).
+        self.pico: dict[str, int] = dict(self.populacao)
         self.aves: dict[int, dict] = {}  # id persistente -> {"classe", "centro", "visto", "criado", "costuras"}
         self.mapa: dict[int, int] = {}   # id do rastreador -> id persistente
         self.proximo = 1
@@ -68,15 +72,19 @@ class IdentidadePersistente:
 
         for k in novas:
             d, _, c = itens[k]
-            limite = self.populacao.get(d.classe)
+            limite_configurado = d.classe in self.populacao
+            pico = self.pico.get(d.classe, 0)
             existentes = sum(1 for a in self.aves.values() if a["classe"] == d.classe)
             sobrando = [pid for pid, a in self.aves.items() if a["classe"] == d.classe and pid not in vistas]
-            if limite and existentes >= limite:
-                if not sobrando:
-                    # classe completa e todas já vistas neste quadro: detecção espúria, fica sem ID
-                    d.id = None
-                    continue
-                # população fechada: é uma ave que já existe, mesmo longe
+            no_teto = existentes >= pico
+            if no_teto and limite_configurado and not sobrando:
+                # população fixa e configurada, já completa e sem ave sumida: detecção espúria, fica sem ID
+                d.id = None
+                continue
+            if no_teto and sobrando:
+                # já vimos esse tanto de uma vez antes (configurado ou não): é uma ave que já
+                # existe, mesmo longe — religa em vez de nascer um ID novo (evita fragmentar
+                # a identidade quando muitas aves da mesma classe se amontoam e se ocluem)
                 pid = min(sobrando, key=lambda p: np.linalg.norm(c - self.aves[p]["centro"]))
                 self.costuras += 1
                 self.aves[pid]["costuras"] += 1
@@ -84,6 +92,7 @@ class IdentidadePersistente:
                 pid = self.proximo
                 self.proximo += 1
                 self.aves[pid] = {"classe": d.classe, "criado": t, "costuras": 0}
+                self.pico[d.classe] = max(pico, existentes + 1)
             atribuido[k] = pid
             vistas.add(pid)
 
@@ -102,6 +111,7 @@ class IdentidadePersistente:
             "ids_ativos": len(self.aves),
             "costuras_totais": self.costuras,
             "populacao_esperada": sum(self.populacao.values()) if self.populacao else None,
+            "pico_por_classe": dict(self.pico),  # inclui classes sem população configurada (ex.: pinto)
             "aves": [
                 {"id": pid, "classe": a["classe"], "criado_ha_s": round(t - a["criado"], 1),
                  "visto_ha_s": round(t - a["visto"], 1) if "visto" in a else None, "costuras": a["costuras"]}

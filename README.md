@@ -27,6 +27,10 @@ Na demo, os limites dos alertas são curtos (sem comer > 100 s, sem beber > 150 
 | **Aves rastreadas** | Por ave: tipo, estado atual, há quanto tempo, tempo sem comer e sem beber, distribuição do tempo e status. |
 | **Log** | Stream em tempo real, com filtros, busca, pausa e download. Clique em uma linha para ver os dados em JSON. |
 
+**Mostrar comportamento** (checkbox acima da Visão ao vivo): a moldura de cada ave é só identificação (UID + cor por classe) e não muda com o comportamento. O comportamento aparece como uma bandeirinha presa no canto da moldura, com nome e cor próprios — desligue o checkbox pra ver só o rastreamento, sem esse ruído.
+
+**Revisar ao vivo** (checkbox ao lado): clique numa moldura confirma a classe que já está nela; passe o mouse sobre a caixa e aperte `1`/`2`/`3` pra corrigir (pinto/galinha/galo). Cada ação salva aquele quadro na hora como dado de treino já revisado — dá pra ir corrigindo o modelo enquanto assiste o vídeo, sem abrir a tela de treino. Só funciona com fonte real (arquivo/webcam/RTSP); a demo não tem imagem de verdade pra salvar.
+
 ### Tipos de evento do log
 
 | Tipo | Quando aparece |
@@ -130,6 +134,7 @@ Fonte (demo | arquivo | webcam | RTSP)
 - **Foco atual: acompanhamento.** O objetivo é que cada ave (pinto, galinha, galo) mantenha o mesmo ID do começo ao fim. Essa é a base para, numa próxima etapa, treinar a detecção de ave doente em cima do histórico de cada uma.
 - **Rastreador:** o cercado é fechado e a câmera é fixa, então as aves não saem de cena. O rastreador mantém uma ave sumida (oclusão, embaixo de uma galinha) por ~6 s antes de desistir e só cria trilha nova com detecção confiante.
 - **Identidade persistente:** mesmo assim o rastreador às vezes cria um ID novo, principalmente com pintos amontoados. Como nenhuma ave entra nem sai, esse ID novo é ligado à ave perdida mais próxima da mesma classe, num raio que cresce com o tempo que ela ficou sumida (`rastreio.raio_base` + `rastreio.raio_por_segundo`, em fração da diagonal do quadro). Para classes de população conhecida (`rastreio.populacao`, hoje 7 galinhas e 1 galo), uma classe completa nunca ganha ave nova. Caixas duplicadas da mesma ave são descartadas.
+  Pinto não tem população fixa configurável (o número varia), mas não fica desprotegido: o sistema aprende sozinho um teto por classe (`monitor/identidade.py`, campo `pico`) igual ao maior número de aves daquela classe já visto ao mesmo tempo. A partir daí, um ID "novo" tenta primeiro religar na ave sumida mais próxima — mesmo fora do raio normal — em vez de nascer um ID novo; só cria de fato quando não sobra nenhuma ave sumida pra explicar a detecção. Isso mantém o UID estável mesmo com dezenas de pintos se ocluindo entre si. O teto aprendido aparece na tela 🧭 Rastreamento.
 - **Classe da trilha:** a classe mostrada é a mais votada ao longo da trilha, então uma troca galinha/galo num quadro isolado não muda a ave.
 - **Comportamento** (comendo, bebendo, andando, descansando, agitado) vem de uma heurística: centro da caixa numa zona de comedouro vira *comendo*, numa zona de bebedouro vira *bebendo*, e a velocidade separa *agitado*, *andando* e *descansando*. O estado é o mais frequente nas últimas `janela_suavizacao` observações, para não ficar "piscando".
 - **Modelo de comportamento/doença:** desligado (`"comportamento": ""`). O `best_seg.pt` do chicken-detector se mostrou ruidoso (indicava `newcastle` e `Breathing` em aves só paradas) e foi treinado com galinhas, não pintos. A detecção de ave doente será treinada numa etapa própria.
@@ -158,7 +163,12 @@ Detector (`modelos/pinteiro.pt`, validação em quadros fora do treino): precis�
 | Ave parada | `limites.imovel_s` | 20 min | 50 s |
 | Lote agitado | `analise.agitacao_fracao` | ≥ 50% das aves visíveis agitadas por 1,5 s | igual |
 
-Outras chaves úteis: `modelos.confianca`, `modelos.rastreador`, `rastreio.identidade_persistente`, `rastreio.populacao`, `modelos.dispositivo` (`""` = automático, `"cpu"`, `"0"` para a GPU), `video.processar_a_cada_n_frames` (use 1 para o rastreador não perder aves), `video.tempo_real_arquivo`, `analise.vel_andando` e `analise.vel_agitado` (fração da largura do quadro por segundo), `analise.esquecer_apos_s`.
+Outras chaves úteis: `modelos.confianca`, `modelos.classes_ativas` (lista — só essas classes chegam ao
+rastreamento/painel; vazio = todas. Ex.: `["galinha"]` pra registrar só galinha enquanto valida uma câmera
+nova, sem pinto/galo no meio), `modelos.rastreador`, `rastreio.identidade_persistente`, `rastreio.populacao`,
+`modelos.dispositivo` (`""` = automático, `"cpu"`, `"0"` para a GPU), `video.processar_a_cada_n_frames`
+(use 1 para o rastreador não perder aves), `video.tempo_real_arquivo`, `analise.vel_andando` e
+`analise.vel_agitado` (fração da largura do quadro por segundo), `analise.esquecer_apos_s`.
 
 ## Sobre os repositórios de referência
 
@@ -213,3 +223,4 @@ logs/                  eventos-AAAA-MM-DD.jsonl (não versionado)
 | POST | `/api/treino/treinar` | `{"epocas":25,"imgsz":960,"batch":4}` — inicia o fine-tuning em segundo plano |
 | GET | `/api/treino/status` | progresso e métricas do treino em andamento ou concluído |
 | POST | `/api/treino/promover` | `{"pesos":"modelos/pinteiro_vAAAAMMDD-HHMMSS.pt"}` — passa a usar esse modelo |
+| POST | `/api/treino/confirmar` | `{"imagem":"<jpeg base64>","caixa":{...},"classe":"pinto"}` — clique/tecla na Visão ao vivo, já revisado |

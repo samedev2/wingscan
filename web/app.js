@@ -7,6 +7,8 @@ const MAX_LOG = 1500;
 const $ = (seletor, raiz = document) => raiz.querySelector(seletor);
 const $$ = (seletor, raiz = document) => [...raiz.querySelectorAll(seletor)];
 
+const CORES_CLASSE = { pinto: "--classe-pinto", galinha: "--classe-galinha", galo: "--classe-galo" };
+
 const app = {
   info: null,
   status: { rodando: false },
@@ -15,6 +17,10 @@ const app = {
   tokenImagem: 0,
   pausado: false,
   ultimaTabela: 0,
+  mostrarComportamento: true,
+  revisaoAoVivo: false,
+  deteccaoSobMouse: null,
+  confirmadasNaSessao: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -298,7 +304,20 @@ function desenhar(estado, imagem) {
   desenharZonas(ctx, W, H, demo);
 
   const comAlerta = new Set(estado.pintos.filter((p) => p.alertas.length).map((p) => p.id));
-  for (const d of estado.deteccoes) desenharDeteccao(ctx, d, W, H, comAlerta.has(d.id), demo);
+  for (const d of estado.deteccoes) {
+    desenharDeteccao(ctx, d, W, H, comAlerta.has(d.id), demo);
+    if (app.revisaoAoVivo && app.deteccaoSobMouse && d.id != null && d.id === app.deteccaoSobMouse.id) desenharRealceRevisao(ctx, d, W, H);
+  }
+}
+
+function desenharRealceRevisao(ctx, d, W, H) {
+  const [x1, y1, x2, y2] = [d.caixa[0] * W, d.caixa[1] * H, d.caixa[2] * W, d.caixa[3] * H];
+  ctx.save();
+  ctx.strokeStyle = cssVar("--primaria");
+  ctx.lineWidth = 3;
+  ctx.setLineDash([]);
+  ctx.strokeRect(x1 - 3, y1 - 3, x2 - x1 + 6, y2 - y1 + 6);
+  ctx.restore();
 }
 
 function desenharPiso(ctx, W, H) {
@@ -384,30 +403,159 @@ function desenharPintinho(ctx, cx, cy, r, comportamento) {
   ctx.restore();
 }
 
+// A moldura é só identificação (UID + classe) — não muda de cor com o comportamento.
+// Comportamento vira uma "flag" à parte, presa no canto da moldura, e some com o filtro.
 function desenharDeteccao(ctx, d, W, H, alerta, demo) {
   const [x1, y1, x2, y2] = [d.caixa[0] * W, d.caixa[1] * H, d.caixa[2] * W, d.caixa[3] * H];
   const w = x2 - x1, h = y2 - y1;
-  const cor = alerta ? cssVar("--vermelho") : cssVar(`--c-${d.comportamento}`) || "#999";
+  const corId = cssVar(CORES_CLASSE[d.classe] || "--sutil");
+  const corMoldura = alerta ? cssVar("--vermelho") : corId;
 
   if (demo) desenharPintinho(ctx, x1 + w / 2, y1 + h / 2, Math.min(w, h) * 0.36, d.comportamento);
 
   ctx.lineWidth = alerta ? 2.5 : 1.8;
-  ctx.strokeStyle = cor;
+  ctx.strokeStyle = corMoldura;
   ctx.setLineDash(alerta ? [5, 3] : []);
   ctx.strokeRect(x1, y1, w, h);
   ctx.setLineDash([]);
 
-  const tipo = d.classe && d.classe !== "pinto" ? `${d.classe} · ` : "";
-  const texto = `${d.id != null ? `#${d.id} ` : ""}${tipo}${d.comportamento || d.rotulo || "?"}${alerta ? " ⚠" : ""}`;
+  const idTexto = `${d.id != null ? `#${d.id}` : "?"}${alerta ? " ⚠" : ""}`;
   ctx.font = "600 11px system-ui, sans-serif";
-  const tw = ctx.measureText(texto).width + 8;
-  const ty = y1 >= 17 ? y1 - 16 : y2 + 1;
-  const tx = Math.min(Math.max(0, x1), W - tw);
-  ctx.fillStyle = cor;
-  caminhoArredondado(ctx, tx, ty, tw, 15, 3);
+  const idW = ctx.measureText(idTexto).width + 8;
+  const idY = y1 >= 17 ? y1 - 16 : y2 + 1;
+  const idX = Math.min(Math.max(0, x1), W - idW);
+  ctx.fillStyle = corMoldura;
+  caminhoArredondado(ctx, idX, idY, idW, 15, 3);
   ctx.fill();
   ctx.fillStyle = "#fff";
-  ctx.fillText(texto, tx + 4, ty + 11);
+  ctx.fillText(idTexto, idX + 4, idY + 11);
+
+  if (app.mostrarComportamento) desenharFlagComportamento(ctx, d, x1, y1, x2, y2, W, idX, idW, idY);
+}
+
+const LARGURA_MINIMA_FLAG = 70; // caixa mais estreita que isso não cabe o texto sem invadir o ID vizinho
+
+// Bandeirinha presa no canto oposto ao rótulo de ID, com um bico triangular apontando pra caixa.
+// Em caixas pequenas e apinhadas (pintinhos amontoados), vira só um pontinho colorido — o texto
+// largo, nesse caso, encostaria no ID de uma ave vizinha, que tem prioridade sobre o comportamento.
+function desenharFlagComportamento(ctx, d, x1, y1, x2, y2, W, idX, idW, idY) {
+  const nome = d.comportamento || d.rotulo;
+  if (!nome) return;
+  const cor = cssVar(`--c-${nome}`) || "#999";
+
+  if (x2 - x1 < LARGURA_MINIMA_FLAG) {
+    ctx.fillStyle = cor;
+    ctx.beginPath();
+    ctx.arc(x2, y1, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
+    return;
+  }
+
+  const texto = d.classe && d.classe !== "pinto" ? `${d.classe} · ${nome}` : nome;
+  ctx.font = "600 11px system-ui, sans-serif";
+  const tw = ctx.measureText(texto).width + 8;
+  const th = 15;
+  const fx = Math.min(Math.max(0, x2 - tw), W - tw);
+  const sobrepoe = fx < idX + idW && fx + tw > idX; // mesma linha que o rótulo de ID e esbarra nele
+  const fy = sobrepoe ? (idY === y1 - 16 ? y2 + 1 : y1 - 16) : idY;
+
+  ctx.fillStyle = cor;
+  caminhoArredondado(ctx, fx, fy, tw, th, 3);
+  ctx.fill();
+  // bico triangular do lado da caixa, dando a sensação de bandeirinha presa na moldura
+  const bicoX = fx + tw < x2 ? fx + tw : fx;
+  ctx.beginPath();
+  ctx.moveTo(bicoX, fy + 3);
+  ctx.lineTo(bicoX + (fx + tw < x2 ? 5 : -5), fy + th / 2);
+  ctx.lineTo(bicoX, fy + th - 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.fillText(texto, fx + 4, fy + 11);
+}
+
+// ---------------------------------------------------------------------------
+// revisão ao vivo: clique confirma a classe da caixa, tecla 1/2/3 corrige —
+// cada ação salva aquele quadro como dado de treino já revisado (ver monitor/treino.py)
+// ---------------------------------------------------------------------------
+function deteccaoNoPonto(px, py) {
+  const estado = app.ultimo?.estado;
+  if (!estado?.imagem) return null; // demo não tem imagem real pra salvar
+  const canvas = $("#canvas");
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  for (let i = estado.deteccoes.length - 1; i >= 0; i--) {
+    const d = estado.deteccoes[i];
+    const [x1, y1, x2, y2] = [d.caixa[0] * W, d.caixa[1] * H, d.caixa[2] * W, d.caixa[3] * H];
+    if (px >= x1 && px <= x2 && py >= y1 && py <= y2) return d;
+  }
+  return null;
+}
+
+function mostrarFlashRevisao(texto, ok = true) {
+  const el = $("#revisao-flash");
+  el.textContent = texto;
+  el.className = ok ? "revisao-flash ok" : "revisao-flash erro";
+  el.hidden = false;
+  clearTimeout(mostrarFlashRevisao._t);
+  mostrarFlashRevisao._t = setTimeout(() => { el.hidden = true; }, 1200);
+}
+
+async function confirmarDeteccao(d, classeForcada) {
+  const imagem = app.ultimo?.estado?.imagem;
+  const classe = classeForcada || d.classe;
+  if (!imagem || !classe) return;
+  const [x1, y1, x2, y2] = d.caixa;
+  try {
+    const resposta = await fetch("/api/treino/confirmar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imagem, caixa: { x1, y1, x2, y2 }, classe }),
+    });
+    const corpo = await resposta.json();
+    if (!corpo.ok) return mostrarFlashRevisao(corpo.erro || "Falha ao salvar", false);
+    app.confirmadasNaSessao++;
+    $("#revisao-contador").textContent = `${app.confirmadasNaSessao} confirmadas`;
+    mostrarFlashRevisao(`✓ ${d.id != null ? `#${d.id} ` : ""}${classe}`);
+  } catch {
+    mostrarFlashRevisao("Não foi possível falar com o servidor", false);
+  }
+}
+
+function configurarRevisaoAoVivo() {
+  const canvas = $("#canvas");
+  const caixa = $("#revisao-ao-vivo");
+  caixa.checked = lembrar("revisaoAoVivo") === "1";
+  app.revisaoAoVivo = caixa.checked;
+  $("#revisao-dica").hidden = !caixa.checked;
+  caixa.addEventListener("change", () => {
+    app.revisaoAoVivo = caixa.checked;
+    guardar("revisaoAoVivo", caixa.checked ? "1" : "0");
+    $("#revisao-dica").hidden = !caixa.checked;
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!app.revisaoAoVivo) return;
+    const rect = canvas.getBoundingClientRect();
+    app.deteccaoSobMouse = deteccaoNoPonto(e.clientX - rect.left, e.clientY - rect.top);
+    canvas.classList.toggle("clicavel", !!app.deteccaoSobMouse);
+  });
+  canvas.addEventListener("mouseleave", () => { app.deteccaoSobMouse = null; });
+
+  canvas.addEventListener("click", (e) => {
+    if (!app.revisaoAoVivo) return;
+    const rect = canvas.getBoundingClientRect();
+    const d = deteccaoNoPonto(e.clientX - rect.left, e.clientY - rect.top);
+    if (d) confirmarDeteccao(d);
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (!app.revisaoAoVivo || !app.deteccaoSobMouse) return;
+    const indice = { "1": "pinto", "2": "galinha", "3": "galo" }[e.key];
+    if (indice) confirmarDeteccao(app.deteccaoSobMouse, indice);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +677,17 @@ function enviarVideo(arquivo) {
   xhr.send(arquivo);
 }
 
+function configurarFiltroComportamento() {
+  const caixa = $("#filtro-comportamento");
+  caixa.checked = lembrar("mostrarComportamento") !== "0";
+  app.mostrarComportamento = caixa.checked;
+  caixa.addEventListener("change", () => {
+    app.mostrarComportamento = caixa.checked;
+    guardar("mostrarComportamento", caixa.checked ? "1" : "0");
+    if (app.ultimo) desenhar(app.ultimo.estado, app.ultimo.imagem);
+  });
+}
+
 function configurarControles() {
   const tipo = $("#tipo");
   tipo.value = lembrar("tipo") || "demo";
@@ -552,6 +711,8 @@ function configurarControles() {
 
 // ---------------------------------------------------------------------------
 configurarControles();
+configurarFiltroComportamento();
+configurarRevisaoAoVivo();
 configurarLog();
 carregarInfo().then(conectar);
 new ResizeObserver(() => app.ultimo && desenhar(app.ultimo.estado, app.ultimo.imagem)).observe($("#tela"));

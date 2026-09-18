@@ -14,3 +14,5 @@ treino/
 # modelos: só o detector do pinteiro é versionado
 modelos/*.pt
 !modelos/pinteiro.pt
+
+modelos/historico/

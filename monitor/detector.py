@@ -44,6 +44,8 @@ class DetectorYOLO:
         self.max_por_quadro = max(1, int(cfg_modelos.get("comportamento_max_por_quadro", 2)))
         # vazio = todas as classes; o best_seg.pt foi treinado com galinhas e erra muito em recortes de pintos
         self.classes_comp = {c.lower() for c in cfg_modelos.get("comportamento_classes", [])}
+        # vazio = todas as classes passam; usado pra registrar só uma classe por vez (ex.: só galinha)
+        self.classes_ativas = {c.lower() for c in cfg_modelos.get("classes_ativas", [])}
         self.extra = {"device": cfg_modelos["dispositivo"]} if cfg_modelos.get("dispositivo") else {}
         rastreador = cfg_modelos.get("rastreador", "bytetrack.yaml")
         self.rastreador = str(raiz / rastreador) if (raiz / rastreador).is_file() else rastreador
@@ -70,6 +72,8 @@ class DetectorYOLO:
                     conf=round(float(conf), 2), id=tid, classe=classe, rotulo=classe,
                 ))
             corrigir_por_tamanho(deteccoes)
+            if self.classes_ativas:
+                deteccoes = [d for d in deteccoes if (d.classe or "").lower() in self.classes_ativas]
             if self.modelo_comp is not None:
                 self._classificar_comportamentos(imagem, deteccoes)
         self._limpar_cache()

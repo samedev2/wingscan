@@ -7,6 +7,7 @@
     "comportamento_a_cada_n_frames": 8,
     "comportamento_max_por_quadro": 2,
     "comportamento_classes": ["galinha", "galo", "chicken"],
+    "classes_ativas": ["pinto"],
     "rastreador": "monitor/rastreadores/pinteiro_bytetrack.yaml",
     "dispositivo": ""
   },
